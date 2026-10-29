@@ -45,7 +45,7 @@ python -m venv .venv
 
 - [x] M0 项目骨架与依赖环境
 - [x] M1 最小 ReAct 智能体（DeepSeek + Tavily，带来源回答）
-- [ ] M2 图建模 + Planner（拆解子任务）
+- [x] M2 图建模 + Planner（拆解子任务）
 - [ ] M3 并行 fan-out（多研究员）
 - [ ] M4 反思闭环 + 成本护栏
 - [ ] M5 结构化引用报告 + 输出护栏
