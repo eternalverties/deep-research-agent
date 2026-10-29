@@ -1,0 +1,40 @@
+"""全局配置：模型规格、温度、预算与护栏开关。
+
+用 pydantic-settings 从环境变量 / .env 文件读取配置；每个字段都有代码级默认值，
+所以不填 .env 也能跑（只是会用默认的 DeepSeek 模型）。
+"""
+
+from dotenv import load_dotenv
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+load_dotenv()
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # 每个逻辑角色对应一个 "provider:model" 字符串，通过 init_chat_model 解析。
+    # 默认全部用 DeepSeek（国内直连、便宜）；换 OpenAI/Qwen/GLM 只需改这里或 .env。
+    model_planner: str = "deepseek:deepseek-chat"
+    model_researcher: str = "deepseek:deepseek-chat"
+    model_synthesizer: str = "deepseek:deepseek-chat"
+    model_critic: str = "deepseek:deepseek-chat"
+    model_judge: str = "deepseek:deepseek-chat"
+
+    temperature: float = 0.0
+
+    # 研究循环与预算上限（M4 用到）：迭代次数 + LLM 调用次数双重封顶。
+    max_research_iterations: int = 2
+    max_llm_calls_per_run: int = 22
+
+    # 重试策略（M4 用到）：遇 429/5xx/超时按指数退避重试。
+    retry_max_attempts: int = 4
+    retry_initial_interval: float = 1.0
+    retry_backoff_factor: float = 2.0
+
+    # 持久化与人在回路（M6 用到）。
+    checkpoint_db_path: str = "checkpoints.db"
+    hitl_approval_enabled: bool = False
+
+
+settings = Settings()
