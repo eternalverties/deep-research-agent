@@ -12,10 +12,20 @@ from langchain_core.messages import HumanMessage
 from research_agent.models import get_model
 from research_agent.tools.search import web_search
 
+_SYSTEM_PROMPT = (
+    "你是严谨的研究助手。回答前必须先调用 web_search 检索可核实的资料；"
+    "最终回答只能基于检索结果，并在末尾用「来源」列出你实际使用过的 URL（每条一行）。"
+    "如果检索结果不足以支撑结论，请直接说明，不要编造。"
+)
+
 
 def run_research(query: str) -> str:
     """构建一个带联网搜索工具的 ReAct 智能体，执行一轮问答并返回最终回答。"""
-    agent = create_agent(get_model("researcher"), tools=[web_search])
+    agent = create_agent(
+        get_model("researcher"),
+        tools=[web_search],
+        system_prompt=_SYSTEM_PROMPT,
+    )
     result = agent.invoke({"messages": [HumanMessage(content=query)]})
     return result["messages"][-1].content
 

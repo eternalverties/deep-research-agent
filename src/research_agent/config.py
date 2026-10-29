@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     model_critic: str = "deepseek:deepseek-chat"
     model_judge: str = "deepseek:deepseek-chat"
 
+    # 搜索服务的密钥。显式放进 Settings，避免各个工具模块隐式依赖 .env 已被加载。
+    tavily_api_key: str = ""
+
     temperature: float = 0.0
 
     # 研究循环与预算上限（M4 用到）：迭代次数 + LLM 调用次数双重封顶。
