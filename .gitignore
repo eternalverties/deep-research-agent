@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 密钥与环境
+.env
+
+# 本地持久化
+checkpoints.db
+*.db
+
+# 第三方参考代码（仅本地学习用，不提交进本项目）
+references/
+
+# 构建产物
+dist/
+build/
+*.egg-info/
+
+# IDE / 系统
+.idea/
+.vscode/
+.DS_Store
