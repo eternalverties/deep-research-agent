@@ -29,7 +29,7 @@ class ResearchReport(BaseModel):
 _SYNTH_SYSTEM = """你是研究报告综合员。基于给定「研究发现」写一份严谨的结构化报告。
 要求：
 1. summary 用 3–5 句话直接回答原问题；
-2. sections 写 3–6 节，每节有清晰小标题，内容必须来自已有发现；
+2. sections 写 3–5 节，每节有清晰小标题，内容必须来自已有发现；
 3. citations 只能从「可用来源清单」里选，绝对不能编造 URL；
 4. 每节的 citations 列出本节实际用到的 URL；
 5. 如果给出「修复要求」，必须按它修正；
@@ -37,7 +37,7 @@ _SYNTH_SYSTEM = """你是研究报告综合员。基于给定「研究发现」�
 只输出结构化结果。"""
 
 
-def _group_findings(findings) -> str:
+def _group_findings(findings, max_items: int = 12, max_chars: int = 300) -> str:
     grouped: dict[str, list[str]] = {}
     for item in findings or []:
         claim = item.claim if not isinstance(item, dict) else item.get("claim", "")
@@ -46,20 +46,52 @@ def _group_findings(findings) -> str:
         if url and url not in grouped[claim]:
             grouped[claim].append(url)
     lines: list[str] = []
-    for claim, urls in grouped.items():
-        lines.append(f"- {claim[:500]}")
+    for claim, urls in list(grouped.items())[:max_items]:
+        lines.append(f"- {claim[:max_chars]}")
         if urls:
             lines.append("  来源：" + "；".join(urls))
     return "\n".join(lines) if lines else "（暂无发现）"
 
 
-def _source_catalog(findings) -> str:
+def _source_catalog(findings, max_urls: int = 20) -> str:
     urls: list[str] = []
     for item in findings or []:
         url = item.source_url if not isinstance(item, dict) else item.get("source_url", "")
         if url and url not in urls:
             urls.append(url)
-    return "\n".join(f"- {url}" for url in urls) if urls else "（无可用来源）"
+    selected = urls[:max_urls]
+    return "\n".join(f"- {url}" for url in selected) if selected else "（无可用来源）"
+
+
+def _fallback_report(findings) -> dict:
+    """结构化输出失败时的保底报告：把已有发现整理成分节 + 来源。"""
+    grouped: dict[str, list[str]] = {}
+    for item in findings or []:
+        claim = item.claim if not isinstance(item, dict) else item.get("claim", "")
+        url = item.source_url if not isinstance(item, dict) else item.get("source_url", "")
+        urls = grouped.setdefault(claim, [])
+        if url and url not in urls:
+            urls.append(url)
+
+    sections = []
+    citations = []
+    seen: set[str] = set()
+    for i, (claim, urls) in enumerate(grouped.items(), 1):
+        sections.append(
+            {"heading": f"发现 {i}", "content": claim, "citations": urls[:3]}
+        )
+        for url in urls:
+            if url and url not in seen:
+                seen.add(url)
+                citations.append({"title": url, "url": url})
+
+    if not sections:
+        sections = [{"heading": "说明", "content": "本次运行没有获得可用发现。", "citations": []}]
+    return {
+        "summary": "（结构化报告生成失败，已启用回退摘要）请结合下方分节阅读已有发现。",
+        "sections": sections,
+        "citations": citations,
+    }
 
 
 def synthesizer_node(state: dict) -> dict:
@@ -67,24 +99,33 @@ def synthesizer_node(state: dict) -> dict:
     findings = state.get("findings") or []
     repair_notes = state.get("repair_notes") or "无"
 
-    report: ResearchReport = get_model("synthesizer").with_structured_output(
-        ResearchReport
-    ).invoke(
-        [
-            ("system", _SYNTH_SYSTEM),
-            (
-                "human",
-                f"原始问题：{state['query']}\n\n"
-                f"研究发现：\n{_group_findings(findings)}\n\n"
-                f"可用来源清单（只能引用这些 URL）：\n{_source_catalog(findings)}\n\n"
-                f"修复要求：{repair_notes}",
-            ),
-        ]
-    )
+    messages = [
+        ("system", _SYNTH_SYSTEM),
+        (
+            "human",
+            f"原始问题：{state['query']}\n\n"
+            f"研究发现：\n{_group_findings(findings)}\n\n"
+            f"可用来源清单（只能引用这些 URL）：\n{_source_catalog(findings)}\n\n"
+            f"修复要求：{repair_notes}",
+        ),
+    ]
+    structured = get_model("synthesizer").with_structured_output(ResearchReport)
 
-    data = report.model_dump()
+    # DeepSeek 偶尔会返回普通文本而不发起工具调用，此时结构化结果会是 None。
+    # 重试一次通常能恢复；仍失败才使用回退报告。
+    report = None
+    calls = 0
+    for _ in range(2):
+        report = structured.invoke(messages)
+        calls += 1
+        if report is not None:
+            break
+
+    # DeepSeek 偶尔会返回空的工具调用；此时不能直接崩溃，改用回退报告，
+    # 保证已经花掉的研究成本仍然能产出可审计的结果。
+    data = report.model_dump() if report is not None else _fallback_report(findings)
     return {
         "report": data,
         "citations": [citation["url"] for citation in data["citations"]],
-        "llm_calls": 1,
+        "llm_calls": calls,
     }

@@ -6,7 +6,7 @@ from research_agent.config import settings
 from research_agent.graph import route_after_output_guard
 from research_agent.guardrails import scan_content, verify_citations
 from research_agent.nodes.output_guard import output_guard_node
-from research_agent.nodes.synthesizer import ResearchReport
+from research_agent.nodes.synthesizer import ResearchReport, _fallback_report
 from research_agent.reporting import render_report_markdown
 from research_agent.state import Finding
 
@@ -96,3 +96,9 @@ def test_research_report_schema() -> None:
         citations=[{"title": "A", "url": "https://a.com"}],
     )
     assert report.citations[0].url == "https://a.com"
+
+
+def test_fallback_report_uses_findings() -> None:
+    report = _fallback_report([Finding(claim="一个发现", source_url="https://a.com")])
+    assert report["sections"][0]["content"] == "一个发现"
+    assert report["citations"] == [{"title": "https://a.com", "url": "https://a.com"}]

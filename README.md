@@ -58,6 +58,24 @@ Synthesizer 输出 `summary + sections + citations` 的结构化报告。输出�
 引用是否来自检索结果，并扫描 PII 与提示词泄漏；不合格时带着修复要求重写一次，
 仍不合格则带标记放行。
 
+### 6. 持久化与人工审批（M6）
+
+开启人工审批：
+
+```bash
+.venv\Scripts\python.exe -m research_agent.graph "你的研究问题" --hitl
+```
+
+Planner 生成计划后图会暂停，展示子任务并等待你选择 approve / edit / reject / abort。
+每次运行都会打印 `thread_id`，状态保存在 `checkpoints.db`（已 gitignore）。
+进程中断后可按线程恢复：
+
+```bash
+.venv\Scripts\python.exe -m research_agent.graph --thread run-xxxxxxxx
+```
+
+无人值守演示可加 `--decision approve` 自动批准。
+
 ## 进度
 
 - [x] M0 项目骨架与依赖环境
@@ -66,7 +84,7 @@ Synthesizer 输出 `summary + sections + citations` 的结构化报告。输出�
 - [x] M3 并行 fan-out（多研究员）
 - [x] M4 反思闭环 + 成本护栏
 - [x] M5 结构化引用报告 + 输出护栏
-- [ ] M6 持久化 + 人在回路
+- [x] M6 持久化 + 人在回路
 - [ ] M7 服务化 + 可观测 + 打包
 - [ ] M8 评测 + CI
 
