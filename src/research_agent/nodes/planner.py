@@ -43,4 +43,4 @@ def planner_node(state: dict) -> dict:
             ("human", f"研究问题：{state['query']}\n\n修改依据：{_feedback_text(state)}"),
         ]
     )
-    return {"subtasks": plan.subtasks, "plan_feedback": ""}
+    return {"subtasks": plan.subtasks, "plan_feedback": "", "llm_calls": 1}

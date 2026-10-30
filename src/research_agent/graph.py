@@ -1,10 +1,15 @@
-"""M3 · 多智能体并行研究图。
+"""M4 · 带反思闭环的多智能体研究图。
 
 当前链路：
-    START → planner →（Send × N，并行 researcher）→ collect → END
+    START → planner →（Send × N，并行 researcher）→ critic
+          ↑                                            │
+          └──────── 覆盖不足且未到上限 ────────────────┘
+                                                       ↓
+                                                   collect → END
 
 Planner 决定运行时「开多少个研究员」；每个 Send 携带一个子任务；
-所有 researcher 分支结束后，findings 通过 reducer 汇总到父状态，collect 只跑一次。
+所有 researcher 分支结束后，findings 通过 reducer 汇总到父状态；
+Critic 判断覆盖是否充分，不足则带着 gaps 回流 Planner 补研。
 """
 
 from __future__ import annotations
@@ -15,7 +20,9 @@ import sys
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
+from research_agent.config import settings
 from research_agent.guardrails import RETRY_POLICY
+from research_agent.nodes.critic import critic_node
 from research_agent.nodes.planner import planner_node
 from research_agent.nodes.researcher import researcher_node
 from research_agent.state import ResearchState
@@ -54,16 +61,35 @@ def collect_node(state: ResearchState) -> dict:
     return {"report": "## 研究发现\n" + body}
 
 
+def route_after_critic(state: ResearchState) -> str:
+    """三重判断：已充分 / 迭代到顶 / 预算花完，任一成立就收尾。
+
+    否则回流 planner 补研——这就是图里的「反思循环」。
+    双重封顶保证它不会无限循环：迭代次数与 LLM 调用预算是两道闸。
+    """
+    iterations = state.get("iterations", 0)
+    budget_spent = state.get("llm_calls", 0) >= settings.max_llm_calls_per_run
+    if (
+        state.get("_sufficient")
+        or iterations >= settings.max_research_iterations
+        or budget_spent
+    ):
+        return "collect"
+    return "planner"
+
+
 def build_graph(checkpointer=None):
     """组装并编译研究图。"""
     graph = StateGraph(ResearchState)
     graph.add_node("planner", planner_node, retry_policy=RETRY_POLICY)
     graph.add_node("researcher", researcher_node, retry_policy=RETRY_POLICY)
+    graph.add_node("critic", critic_node, retry_policy=RETRY_POLICY)
     graph.add_node("collect", collect_node)
 
     graph.add_edge(START, "planner")
     graph.add_conditional_edges("planner", route_to_researchers, ["researcher", END])
-    graph.add_edge("researcher", "collect")
+    graph.add_edge("researcher", "critic")
+    graph.add_conditional_edges("critic", route_after_critic, ["planner", "collect"])
     graph.add_edge("collect", END)
     return graph.compile(checkpointer=checkpointer)
 
@@ -81,6 +107,8 @@ def main() -> None:
     print("\n子任务数：", len(result.get("subtasks", [])))
     print("发现数：", len(result.get("findings", [])))
     print("模型调用数：", result.get("llm_calls", 0))
+    print("迭代轮数：", result.get("iterations", 0))
+    print("覆盖是否充分：", result.get("_sufficient", False))
 
 
 if __name__ == "__main__":

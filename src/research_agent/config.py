@@ -28,7 +28,8 @@ class Settings(BaseSettings):
 
     # 研究循环与预算上限（M4 用到）：迭代次数 + LLM 调用次数双重封顶。
     max_research_iterations: int = 2
-    max_llm_calls_per_run: int = 22
+    # 5 个研究员一轮通常要 20+ 次调用，40 留出一次反思补研的余量，同时仍能兜底。
+    max_llm_calls_per_run: int = 40
 
     # 重试策略（M4 用到）：遇 429/5xx/超时按指数退避重试。
     retry_max_attempts: int = 4
