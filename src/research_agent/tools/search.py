@@ -14,6 +14,7 @@ from langchain_tavily import TavilySearch
 from research_agent.config import settings
 
 _BING_LOCK = threading.Lock()
+_TAVILY_DISABLED = False
 
 
 @lru_cache(maxsize=1)
@@ -88,20 +89,69 @@ def _bing_search(query: str) -> dict:
     return {"query": query, "provider": "bing", "results": results}
 
 
+def _serper_search(query: str) -> dict:
+    """Serper（Google 结果）降级；需要 SERPER_API_KEY。"""
+    if not settings.serper_api_key:
+        return {"error": "Serper: API key not configured"}
+    try:
+        response = httpx.post(
+            "https://google.serper.dev/search",
+            headers={
+                "X-API-KEY": settings.serper_api_key,
+                "Content-Type": "application/json",
+            },
+            json={"q": query, "num": settings.search_max_results},
+            timeout=httpx.Timeout(settings.search_timeout_seconds, connect=5.0),
+        )
+        response.raise_for_status()
+        data = response.json()
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"Serper: {type(exc).__name__}: {exc}"}
+
+    results: list[dict] = []
+    for item in (data.get("organic") or [])[: settings.search_max_results]:
+        url = str(item.get("link") or "")
+        if not url or "google.com/goto" in url or "google.com/url?" in url:
+            continue
+        results.append(
+            {
+                "url": url,
+                "title": _clean_text(item.get("title") or ""),
+                "content": _clean_text(item.get("snippet") or ""),
+                "score": 0.0,
+            }
+        )
+    return {"query": query, "provider": "serper", "results": results}
+
+
 @tool("web_search", description="搜索互联网获取最新信息，用于回答需要外部资料佐证的问题。")
 def web_search(query: str) -> str:
-    """优先 Tavily；auto 模式下额度/限流失败时自动切 Bing。"""
+    """auto 模式：Tavily -> Serper -> Bing RSS。"""
+    global _TAVILY_DISABLED
     provider = (settings.search_provider or "auto").lower()
     if provider == "duckduckgo":  # 兼容旧配置
         provider = "bing"
-    if provider in {"auto", "tavily"}:
+    if provider == "serper":
+        return _serper_search(query)
+    if provider == "bing":
+        return _bing_search(query)
+    if provider == "tavily":
+        try:
+            return _get_search().invoke({"query": query})
+        except Exception as exc:  # noqa: BLE001
+            return {"error": f"Tavily: {type(exc).__name__}: {exc}"}
+
+    # auto：Tavily 失败一次后熔断，本次进程后续直接走 Serper/Bing。
+    if not _TAVILY_DISABLED:
         try:
             result = _get_search().invoke({"query": query})
             if not _has_error(result):
                 return result
-            if provider == "tavily":
-                return result
-        except Exception as exc:  # noqa: BLE001
-            if provider == "tavily":
-                return {"error": f"Tavily: {type(exc).__name__}: {exc}"}
+            _TAVILY_DISABLED = True
+        except Exception:  # noqa: BLE001
+            _TAVILY_DISABLED = True
+    if settings.serper_api_key:
+        result = _serper_search(query)
+        if not _has_error(result):
+            return result
     return _bing_search(query)

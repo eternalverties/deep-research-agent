@@ -23,14 +23,15 @@ FastAPI 采用 202 提交 + 轮询，避免长任务阻塞 HTTP 连接。
 URL 真实存在，不代表原文真的支持报告里的论述。因此系统在报告与输出护栏之间增加了
 Claim-Evidence 核验链路：
 
-1. 研究员把 Tavily 返回的 `url/title/content` 存成结构化 Evidence 片段；
+1. 研究员把搜索工具返回的 `url/title/content` 存成结构化 Evidence 片段；
 2. Verifier 从报告中抽取 5–8 条原子事实断言，并保留每条断言引用的 URL；
 3. 证据匹配优先使用断言声明的来源，没有直接引用时按词面重合度排序；
 4. 模型逐条判定 `supported / contradicted / insufficient`，并给出证据 ID 与理由；
 5. 输出护栏把矛盾或证据不足的断言写入修复要求，触发一次有界重写；预算不足时直接带标记放行。
 
 前端的「证据核验」面板会展示每条断言的状态、置信度、理由和对应证据片段。
-模型调用预算会为合成、核验与修复预留 6 次调用，避免研究阶段把额度吃光。
+模型调用预算会为合成、核验与修复预留 6 次调用，并在开启新一轮补研前要求
+至少剩余 20 次调用，避免研究阶段把额度吃光。
 
 ## 可观测性
 
@@ -67,11 +68,12 @@ python -m venv .venv
 
 - `DEEPSEEK_API_KEY`：DeepSeek 模型密钥（https://platform.deepseek.com）
 - `TAVILY_API_KEY`：Tavily 联网搜索密钥（https://tavily.com，有免费额度）
+- `SERPER_API_KEY`：Serper 搜索密钥（https://serper.dev，Tavily 额度用尽后的高质量后备）
 
 搜索默认 `SEARCH_PROVIDER=auto`：优先 Tavily，遇到额度/限流/服务不可用时自动切换
-Bing RSS。也可以显式设 `SEARCH_PROVIDER=bing`，完全不需要搜索 key。
-Bing 降级使用 RSS + httpx 硬超时，并对并发请求做串行保护；速度和质量都会低于 Tavily，
-前端会显示「搜索降级」提示。
+Serper；没有 Serper key 时再切 Bing RSS。也可以显式设 `tavily` / `serper` / `bing`。
+Tavily 失败一次后会熔断，本次进程后续直接走后备源。Bing 是免费容灾，使用 RSS +
+httpx 硬超时，前端会显示「搜索降级」提示。
 
 ### 4. 运行 M1：最小 ReAct 智能体
 
@@ -92,7 +94,8 @@ Bing 降级使用 RSS + httpx 硬超时，并对并发请求做串行保护；�
 
 Planner 先拆解子任务，再用 `Send` 为每个子任务并行派发一个研究员，最后汇总发现、
 来源 URL、子任务数与模型调用数。Critic 会评估覆盖度，不足时带着缺口回流 Planner
-补研。最多 2 轮，模型调用预算兜底；并发上限为 3，节点带指数退避重试。
+补研。最多 2 轮；新一轮补研前要求剩余预算至少 20 次调用；并发上限为 3，
+节点带指数退避重试。
 
 Synthesizer 输出 `summary + sections + citations` 的结构化报告，Verifier 再把报告
 拆成原子断言并对照证据片段核验。输出护栏会逐条校验引用是否来自检索结果、扫描
@@ -170,14 +173,14 @@ docker run --env-file .env -p 8000:8000 deep-research-agent
 
 评测包含三项质量门槛：LLM-as-judge 的忠实度与覆盖度，以及程序化引用准确率；
 另外输出 Claim 支持率作为诊断指标。门槛由 `EVAL_MIN_*` 环境变量控制。
-当前有 64 个离线测试通过，1 个端到端质量门槛测试按需运行。
+当前有 69 个离线测试通过，1 个端到端质量门槛测试按需运行。
 
 Claim-Evidence 版本之前的完整样例结果为忠实度 0.9、覆盖度 0.83、引用准确率 1.0。
 加入 Claim-Evidence 后，Tavily 免费额度用尽（`Error 432`）。系统会自动降级到
-Bing RSS，仍可完成研究；但降级搜索的质量和速度低于 Tavily，完整质量评测
+Serper（若配置）或 Bing RSS，仍可完成研究；Bing 的质量和速度会低于 Tavily，完整质量评测
 建议在有 Tavily 额度时重新运行 `python -m evals.run_evals --max-cases 1`。
 
-基础设施错误会被明确区分：Tavily 返回 429/432/5xx 时先尝试 Bing RSS 降级；
+基础设施错误会被明确区分：Tavily 返回 429/432/5xx 时先尝试 Serper，再尝试 Bing RSS；
 两者都失败才让研究员提前结束，API 和前端显示「检索服务不可用」，评测标记
 `infrastructure_error`，不会把搜索故障误报成质量下降。
 
@@ -212,8 +215,8 @@ CI 工作流在 `.github/workflows/`：`ci.yml` 每次 push/PR 跑 lint 与离�
   系统自动触发重写并删除无法核实的数字。
 - 内置节点级执行轨迹（耗时、模型调用数、并行研究员明细），通过 API 和前端时间线展示；
   支持 LangSmith 查看完整调用树，并对搜索额度/限流错误做快速失败与明确提示。
-- 实现搜索提供方降级：Tavily 额度/限流失败时自动切换 Bing RSS，统一结果结构，
-  也支持零 key 的 Bing 模式，并在前端显式标记「搜索降级」。
+- 实现多级搜索降级：Tavily → Serper → Bing RSS，带 Tavily 熔断与统一结果结构；
+  前端会标记搜索源，Bing 后备会显示「搜索降级」提示。
 - 使用 FastAPI 提交-轮询 API 与 Docker 封装长任务服务，支持异步研究任务与人工审批。
 
 ## 参考实现

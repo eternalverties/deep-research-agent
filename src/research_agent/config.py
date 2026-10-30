@@ -24,6 +24,7 @@ class Settings(BaseSettings):
 
     # 搜索服务的密钥。显式放进 Settings，避免各个工具模块隐式依赖 .env 已被加载。
     tavily_api_key: str = ""
+    serper_api_key: str = ""
     search_provider: str = "auto"  # auto / tavily / bing
     search_max_results: int = 6
     search_timeout_seconds: int = 10
@@ -46,6 +47,7 @@ class Settings(BaseSettings):
     # 5 个研究员一轮通常要 20+ 次调用，40 留出一次反思补研的余量，同时仍能兜底。
     max_llm_calls_per_run: int = 60
     budget_reserve_for_synthesis: int = 6
+    min_calls_for_next_round: int = 20
 
     # Claim-Evidence 事实核验
     enable_verifier: bool = True

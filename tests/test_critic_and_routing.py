@@ -50,6 +50,17 @@ def test_stop_when_only_synthesis_reserve_remains() -> None:
     assert route_after_critic(state) == "synthesizer"
 
 
+def test_stop_when_next_round_budget_too_small() -> None:
+    state = {
+        "_sufficient": False,
+        "iterations": 0,
+        "llm_calls": settings.max_llm_calls_per_run
+        - settings.min_calls_for_next_round
+        + 1,
+    }
+    assert route_after_critic(state) == "synthesizer"
+
+
 def test_critic_verdict_schema() -> None:
     verdict = CriticVerdict(sufficient=False, gaps=["缺少成本数据"], notes="证据不足")
     assert verdict.sufficient is False

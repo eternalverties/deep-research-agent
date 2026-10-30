@@ -15,7 +15,8 @@ def _detail(node: str, state: dict, result: dict) -> str:
         task = (state.get("subtasks") or ["未知子任务"])[0]
         findings = len(result.get("findings") or [])
         evidence = len(result.get("evidence") or [])
-        return f"{task[:80]} · 发现 {findings} · 证据 {evidence}"
+        provider = result.get("search_provider") or "tavily"
+        return f"[{provider}] {task[:80]} · 发现 {findings} · 证据 {evidence}"
     if node == "critic":
         verdict = "覆盖充分" if result.get("_sufficient") else "需要补研"
         return f"{verdict} · 缺口 {len(result.get('gaps') or [])}"

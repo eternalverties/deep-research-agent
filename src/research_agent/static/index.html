@@ -185,6 +185,7 @@
 
     .error { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: rgba(220, 38, 38, 0.1); color: var(--danger); font-size: 13px; border: 1px solid rgba(220, 38, 38, 0.18); }
     .warning { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: rgba(217, 119, 6, 0.1); color: var(--warning); font-size: 12px; border: 1px solid rgba(217, 119, 6, 0.2); }
+    .provider { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); color: var(--muted); font-size: 12px; border: 1px solid var(--line); }
 
     .hitl { margin-top: 20px; padding: 20px; border-color: rgba(217, 119, 6, 0.35); background: linear-gradient(180deg, rgba(217, 119, 6, 0.08), var(--surface)); }
     .hitl h3 { margin: 0 0 6px; font-size: 18px; }
@@ -726,14 +727,19 @@
 
     function updateSearchProvider(provider) {
       const box = $("#degradedBox");
-      if (provider && provider !== "tavily") {
-        box.textContent =
-          `搜索降级：${String(provider).toUpperCase()}（免费后备），结果质量可能低于 Tavily`;
-        show(box);
-      } else {
+      if (!provider) {
         box.textContent = "";
         hide(box);
+        return;
       }
+      if (provider === "bing") {
+        box.className = "warning";
+        box.textContent = "搜索降级：BING（免费后备），结果质量可能低于 Tavily / Serper";
+      } else {
+        box.className = "provider";
+        box.textContent = `搜索源：${String(provider).toUpperCase()}`;
+      }
+      show(box);
     }
 
     function renderVerification(data) {

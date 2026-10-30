@@ -82,14 +82,11 @@ def route_after_critic(state: ResearchState) -> str:
     双重封顶保证它不会无限循环：迭代次数与 LLM 调用预算是两道闸。
     """
     iterations = state.get("iterations", 0)
-    # 给合成 + 核验 + 有界修复预留预算，避免研究阶段把总额度吃光。
-    budget_spent = state.get("llm_calls", 0) >= (
-        settings.max_llm_calls_per_run - settings.budget_reserve_for_synthesis
-    )
+    remaining = settings.max_llm_calls_per_run - state.get("llm_calls", 0)
     if (
         state.get("_sufficient")
         or iterations >= settings.max_research_iterations
-        or budget_spent
+        or remaining < settings.min_calls_for_next_round
     ):
         return "synthesizer"
     return "planner"
