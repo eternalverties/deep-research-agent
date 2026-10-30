@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from pydantic import BaseModel, Field
 
 from research_agent.models import get_model
@@ -35,6 +37,21 @@ _SYNTH_SYSTEM = """你是研究报告综合员。基于给定「研究发现」�
 5. 如果给出「修复要求」，必须按它修正；
 6. 证据不足的地方要明确写出局限，不要用常识补齐。
 只输出结构化结果。"""
+
+_MD_SYSTEM = _SYNTH_SYSTEM + """
+请改用 Markdown 输出，严格采用以下结构：
+## 摘要
+（3–5 句直接回答）
+
+## 一、小节标题
+（论证内容，可用 [标题](URL) 标注来源）
+
+## 参考来源
+- [标题](URL)
+"""
+
+_LINK_RE = re.compile(r"\[([^\]]+)\]\((https?://[^)\s]+)\)")
+_BARE_URL_RE = re.compile(r"https?://[A-Za-z0-9\-._~:/?#@!$&*+;=%\[\]]+")
 
 
 def _group_findings(findings, max_items: int = 12, max_chars: int = 300) -> str:
@@ -94,6 +111,60 @@ def _fallback_report(findings) -> dict:
     }
 
 
+def _as_text(content) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(
+            str(item.get("text", "")) if isinstance(item, dict) else str(item)
+            for item in content
+        )
+    return str(content)
+
+
+def _unique_urls(text: str) -> list[str]:
+    urls: list[str] = []
+    for raw in _BARE_URL_RE.findall(text or ""):
+        url = raw.rstrip(".,;:!?")
+        if url and url not in urls:
+            urls.append(url)
+    return urls
+
+
+def _parse_markdown_report(text: str) -> dict:
+    """把 Markdown 报告确定性地解析成 summary / sections / citations。"""
+    text = text or ""
+    summary_match = re.search(r"##\s*摘要\s*\n(.*?)(?=\n##\s|\Z)", text, re.S)
+    summary = summary_match.group(1).strip() if summary_match else ""
+
+    sections: list[dict] = []
+    for match in re.finditer(r"##\s+(.+?)\s*\n(.*?)(?=\n##\s|\Z)", text, re.S):
+        heading = match.group(1).strip()
+        content = match.group(2).strip()
+        if heading in {"摘要", "参考来源", "参考资料"}:
+            continue
+        sections.append(
+            {"heading": heading, "content": content, "citations": _unique_urls(content)}
+        )
+
+    citations: list[dict] = []
+    seen: set[str] = set()
+    for title, url in _LINK_RE.findall(text):
+        if url not in seen:
+            seen.add(url)
+            citations.append({"title": title, "url": url})
+    for url in _unique_urls(text):
+        if url not in seen:
+            seen.add(url)
+            citations.append({"title": url, "url": url})
+
+    if not summary:
+        summary = sections[0]["content"][:500] if sections else "（报告为空）"
+    if not sections:
+        sections = [{"heading": "研究发现", "content": text.strip() or "（无内容）", "citations": []}]
+    return {"summary": summary, "sections": sections, "citations": citations}
+
+
 def synthesizer_node(state: dict) -> dict:
     """生成（或在修复时重写）结构化报告。"""
     findings = state.get("findings") or []
@@ -112,7 +183,7 @@ def synthesizer_node(state: dict) -> dict:
     structured = get_model("synthesizer").with_structured_output(ResearchReport)
 
     # DeepSeek 偶尔会返回普通文本而不发起工具调用，此时结构化结果会是 None。
-    # 重试一次通常能恢复；仍失败才使用回退报告。
+    # 先重试一次；仍失败则改用 Markdown 报告 + 确定性解析。
     report = None
     calls = 0
     for _ in range(2):
@@ -121,9 +192,16 @@ def synthesizer_node(state: dict) -> dict:
         if report is not None:
             break
 
-    # DeepSeek 偶尔会返回空的工具调用；此时不能直接崩溃，改用回退报告，
-    # 保证已经花掉的研究成本仍然能产出可审计的结果。
-    data = report.model_dump() if report is not None else _fallback_report(findings)
+    if report is not None:
+        data = report.model_dump()
+    else:
+        markdown = get_model("synthesizer").invoke(
+            [("system", _MD_SYSTEM), messages[1]]
+        )
+        calls += 1
+        data = _parse_markdown_report(_as_text(markdown.content))
+        if not data["sections"]:
+            data = _fallback_report(findings)
     return {
         "report": data,
         "citations": [citation["url"] for citation in data["citations"]],

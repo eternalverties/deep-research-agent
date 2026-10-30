@@ -76,6 +76,39 @@ Planner 生成计划后图会暂停，展示子任务并等待你选择 approve 
 
 无人值守演示可加 `--decision approve` 自动批准。
 
+### 7. HTTP 服务（M7）
+
+启动服务：
+
+```bash
+.venv\Scripts\python.exe -m uvicorn research_agent.api:api --host 0.0.0.0 --port 8000
+```
+
+提交任务（返回 202 + thread_id）：
+
+```bash
+curl -X POST http://127.0.0.1:8000/research -H "Content-Type: application/json" -d "{\"query\":\"你的研究问题\"}"
+```
+
+轮询结果：
+
+```bash
+curl http://127.0.0.1:8000/research/<thread_id>
+```
+
+开启 HITL 时，状态会变为 `interrupted`，可用 `/research/{thread_id}/resume` 提交
+`{"action":"approve"}` 等决定。健康检查为 `GET /health`。
+
+Docker 构建与运行：
+
+```bash
+docker build --build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple -t deep-research-agent .
+docker run --env-file .env -p 8000:8000 deep-research-agent
+```
+
+可观测：设置 `LANGSMITH_TRACING=true` 与 `LANGSMITH_API_KEY` 后，每次运行会带上
+`run_name` 与角色模型元数据，可在 LangSmith 查看完整调用树。
+
 ## 进度
 
 - [x] M0 项目骨架与依赖环境
@@ -85,7 +118,7 @@ Planner 生成计划后图会暂停，展示子任务并等待你选择 approve 
 - [x] M4 反思闭环 + 成本护栏
 - [x] M5 结构化引用报告 + 输出护栏
 - [x] M6 持久化 + 人在回路
-- [ ] M7 服务化 + 可观测 + 打包
+- [x] M7 服务化 + 可观测 + 打包
 - [ ] M8 评测 + CI
 
 ## 参考实现

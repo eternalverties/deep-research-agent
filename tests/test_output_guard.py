@@ -6,7 +6,11 @@ from research_agent.config import settings
 from research_agent.graph import route_after_output_guard
 from research_agent.guardrails import scan_content, verify_citations
 from research_agent.nodes.output_guard import output_guard_node
-from research_agent.nodes.synthesizer import ResearchReport, _fallback_report
+from research_agent.nodes.synthesizer import (
+    ResearchReport,
+    _fallback_report,
+    _parse_markdown_report,
+)
 from research_agent.reporting import render_report_markdown
 from research_agent.state import Finding
 
@@ -102,3 +106,15 @@ def test_fallback_report_uses_findings() -> None:
     report = _fallback_report([Finding(claim="一个发现", source_url="https://a.com")])
     assert report["sections"][0]["content"] == "一个发现"
     assert report["citations"] == [{"title": "https://a.com", "url": "https://a.com"}]
+
+
+def test_parse_markdown_report() -> None:
+    markdown = (
+        "## 摘要\n这是摘要。\n\n"
+        "## 一、第一节\n内容 [A](https://a.com)。\n\n"
+        "## 参考来源\n- [A](https://a.com)"
+    )
+    report = _parse_markdown_report(markdown)
+    assert report["summary"] == "这是摘要。"
+    assert report["sections"][0]["heading"] == "一、第一节"
+    assert report["citations"] == [{"title": "A", "url": "https://a.com"}]
