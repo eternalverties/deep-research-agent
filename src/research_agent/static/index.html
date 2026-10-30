@@ -1,0 +1,767 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Deep Research Agent</title>
+  <style>
+    :root {
+      --bg: #f4f6fb;
+      --surface: #ffffff;
+      --surface-2: #f8fafc;
+      --text: #0f172a;
+      --muted: #64748b;
+      --line: #e2e8f0;
+      --accent: #2563eb;
+      --accent-2: #0ea5e9;
+      --success: #059669;
+      --warning: #d97706;
+      --danger: #dc2626;
+      --shadow: 0 14px 40px rgba(15, 23, 42, 0.08);
+      --radius: 18px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0b1120;
+        --surface: #111a2e;
+        --surface-2: #0f172a;
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --line: #233047;
+        --shadow: 0 16px 44px rgba(0, 0, 0, 0.35);
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(900px 420px at 12% -8%, rgba(37, 99, 235, 0.14), transparent 60%),
+        radial-gradient(700px 360px at 92% 0%, rgba(14, 165, 233, 0.12), transparent 55%),
+        var(--bg);
+      font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    a { color: var(--accent); }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.96));
+      color: #f8fafc;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+      backdrop-filter: blur(14px);
+    }
+
+    .topbar-inner {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .logo {
+      width: 40px; height: 40px; border-radius: 12px;
+      display: grid; place-items: center;
+      font-weight: 800; letter-spacing: -0.5px; color: #fff;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      box-shadow: 0 8px 22px rgba(37, 99, 235, 0.4);
+    }
+    .brand h1 { font-size: 16px; margin: 0; letter-spacing: 0.2px; }
+    .brand p { margin: 0; font-size: 12px; color: #94a3b8; }
+
+    .top-actions { display: flex; align-items: center; gap: 14px; font-size: 13px; }
+    .top-actions a { color: #cbd5e1; text-decoration: none; }
+    .top-actions a:hover { color: #fff; }
+    .health { display: inline-flex; align-items: center; gap: 6px; color: #cbd5e1; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #64748b; }
+    .dot.ok { background: #22c55e; box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.14); }
+    .dot.bad { background: #ef4444; }
+
+    main { max-width: 1120px; margin: 0 auto; padding: 34px 20px 90px; }
+
+    .hero { margin-bottom: 24px; }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--accent);
+    }
+    .hero h2 { font-size: clamp(28px, 4vw, 44px); line-height: 1.15; margin: 10px 0 10px; letter-spacing: -1px; }
+    .grad { background: linear-gradient(100deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .hero p { margin: 0; color: var(--muted); max-width: 760px; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .form-card { padding: 20px; margin-top: 20px; }
+    .form-card label { display: block; font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 8px; }
+    textarea {
+      width: 100%; resize: vertical; min-height: 118px;
+      padding: 14px 16px; border-radius: 14px;
+      border: 1px solid var(--line); background: var(--surface-2); color: var(--text);
+      font: inherit; font-size: 15px; outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12); }
+
+    .form-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 14px; flex-wrap: wrap; }
+    .samples { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+    .chip {
+      border: 1px solid var(--line); background: var(--surface-2); color: var(--text);
+      border-radius: 999px; padding: 5px 10px; cursor: pointer; font: inherit; font-size: 12px;
+    }
+    .chip:hover { border-color: var(--accent); color: var(--accent); }
+
+    button { font: inherit; }
+    .btn {
+      border: 0; cursor: pointer; border-radius: 12px; padding: 11px 18px;
+      font-weight: 700; font-size: 14px; transition: transform 0.12s, filter 0.2s, background 0.2s;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary { color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: 0 10px 24px rgba(37, 99, 235, 0.28); }
+    .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; }
+    .btn-ghost { background: var(--surface-2); color: var(--text); border: 1px solid var(--line); }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-danger { background: #fee2e2; color: var(--danger); border: 1px solid #fecaca; }
+    @media (prefers-color-scheme: dark) { .btn-danger { background: rgba(220, 38, 38, 0.14); border-color: rgba(248, 113, 113, 0.35); } }
+
+    .hidden { display: none !important; }
+    .muted { color: var(--muted); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+
+    .status-card { padding: 18px 20px; margin-top: 20px; }
+    .status-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .status-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .badge { border-radius: 999px; padding: 5px 10px; font-size: 12px; font-weight: 800; letter-spacing: 0.02em; }
+    .badge.running { background: rgba(37, 99, 235, 0.12); color: var(--accent); }
+    .badge.interrupted { background: rgba(217, 119, 6, 0.14); color: var(--warning); }
+    .badge.completed { background: rgba(5, 150, 105, 0.12); color: var(--success); }
+    .badge.error { background: rgba(220, 38, 38, 0.12); color: var(--danger); }
+    .thread { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px; }
+
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(84px, 1fr)); gap: 10px; }
+    .metric { text-align: center; padding: 6px 12px; border-left: 1px solid var(--line); }
+    .metric:first-child { border-left: 0; }
+    .metric span { display: block; font-size: 18px; font-weight: 800; letter-spacing: -0.3px; }
+    .metric label { display: block; font-size: 11px; color: var(--muted); }
+
+    .progress { height: 4px; margin-top: 16px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+    .progress > div { height: 100%; width: 40%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); animation: slide 1.4s ease-in-out infinite; }
+    .progress.done > div { animation: none; width: 100%; background: var(--success); }
+    @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
+
+    .error { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: rgba(220, 38, 38, 0.1); color: var(--danger); font-size: 13px; border: 1px solid rgba(220, 38, 38, 0.18); }
+
+    .hitl { margin-top: 20px; padding: 20px; border-color: rgba(217, 119, 6, 0.35); background: linear-gradient(180deg, rgba(217, 119, 6, 0.08), var(--surface)); }
+    .hitl h3 { margin: 0 0 6px; font-size: 18px; }
+    .hitl p { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+    .hitl ol { margin: 0 0 16px; padding-left: 20px; }
+    .hitl li { margin: 6px 0; }
+    .hitl-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .hitl-extra { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--line); }
+    .hitl-extra label { display: block; font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+
+    .report { margin-top: 20px; padding: 22px; }
+    .report-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .report-head h2 { margin: 0; font-size: 22px; letter-spacing: -0.3px; }
+    .flags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .flag { font-size: 12px; padding: 5px 10px; border-radius: 999px; background: rgba(217, 119, 6, 0.12); color: var(--warning); border: 1px solid rgba(217, 119, 6, 0.2); }
+
+    .summary {
+      margin: 18px 0 8px; padding: 16px 18px; border-radius: 14px;
+      background: linear-gradient(180deg, rgba(37, 99, 235, 0.07), transparent);
+      border-left: 4px solid var(--accent);
+    }
+    .summary p { margin: 0 0 8px; }
+    .summary p:last-child { margin-bottom: 0; }
+
+    .section { margin-top: 26px; }
+    .section h3 { font-size: 18px; margin: 0 0 8px; letter-spacing: -0.2px; }
+    .section p { margin: 0 0 10px; }
+    .section a, .citation a { color: var(--accent); }
+    .section-cites { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .section-cites a {
+      font-size: 12px; color: var(--muted); text-decoration: none;
+      border: 1px solid var(--line); border-radius: 999px; padding: 3px 9px;
+    }
+    .section-cites a:hover { color: var(--accent); border-color: var(--accent); }
+
+    .citations { margin-top: 30px; padding-top: 18px; border-top: 1px solid var(--line); }
+    .citations h3 { margin: 0 0 10px; font-size: 16px; }
+    .citation-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 18px; }
+    .citation { font-size: 13px; overflow-wrap: anywhere; }
+
+    .empty {
+      margin-top: 20px; padding: 34px 18px; text-align: center; color: var(--muted);
+      border: 1px dashed var(--line); border-radius: var(--radius);
+    }
+
+    footer { max-width: 1120px; margin: 0 auto; padding: 0 20px 36px; color: var(--muted); font-size: 12px; }
+
+    @media (max-width: 720px) {
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+      .metric:nth-child(3) { border-left: 0; }
+      .metric { padding: 6px 8px; }
+      .thread { max-width: 190px; }
+      .citation-list { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="logo">DR</div>
+        <div>
+          <h1>Deep Research Agent</h1>
+          <p>多智能体深度研究 · 并行检索 · 可溯源引用</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <span class="health"><span id="healthDot" class="dot"></span><span id="healthText">API 检测中</span></span>
+        <a href="/docs" target="_blank" rel="noopener">API 文档</a>
+        <a href="https://github.com/eternalverties/deep-research-agent" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="eyebrow">LangGraph · Multi-Agent · Cited Reports</div>
+      <h2>从一个问题，到一份<span class="grad">可溯源的研究报告</span></h2>
+      <p>Planner 拆解问题，并行研究员联网检索，Critic 发现缺口后补研，Synthesizer 生成带引用的结构化报告。</p>
+    </section>
+
+    <section class="card form-card">
+      <form id="researchForm">
+        <label for="query">研究问题</label>
+        <textarea id="query" placeholder="例如：远程办公对软件团队协作效率的影响是什么？" maxlength="2000"></textarea>
+        <div class="form-row">
+          <div class="samples">
+            <span>试试：</span>
+            <button type="button" class="chip" data-q="LangGraph 和 CrewAI 在多智能体编排上的主要区别是什么？">LangGraph vs CrewAI</button>
+            <button type="button" class="chip" data-q="大模型 Agent 在企业落地时面临的主要技术挑战是什么？">Agent 落地挑战</button>
+            <button type="button" class="chip" data-q="RAG 和微调的适用场景与主要取舍是什么？">RAG vs 微调</button>
+          </div>
+          <button type="submit" id="submitBtn" class="btn btn-primary">开始研究</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="statusCard" class="card status-card hidden">
+      <div class="status-head">
+        <div class="status-left">
+          <span id="statusBadge" class="badge running" aria-live="polite">研究中</span>
+          <span id="threadId" class="thread mono"></span>
+        </div>
+        <div class="metrics">
+          <div class="metric"><span id="metricCalls">0</span><label>模型调用</label></div>
+          <div class="metric"><span id="metricIterations">0</span><label>迭代轮数</label></div>
+          <div class="metric"><span id="metricRepairs">0</span><label>修复次数</label></div>
+          <div class="metric"><span id="metricElapsed">0s</span><label>耗时</label></div>
+        </div>
+      </div>
+      <div id="progress" class="progress"><div></div></div>
+      <div id="errorBox" class="error hidden" role="alert"></div>
+    </section>
+
+    <section id="hitlCard" class="card hitl hidden">
+      <h3>需要你的审批</h3>
+      <p>系统已生成研究计划。继续后会并行调用多个研究员，请确认方向。</p>
+      <ol id="hitlSubtasks"></ol>
+      <div class="hitl-actions">
+        <button type="button" class="btn btn-primary" data-action="approve">批准并继续</button>
+        <button type="button" class="btn btn-ghost" data-action="edit">修改后继续</button>
+        <button type="button" class="btn btn-ghost" data-action="reject">打回重规划</button>
+        <button type="button" class="btn btn-danger" data-action="abort">中止</button>
+      </div>
+      <div id="hitlExtra" class="hitl-extra hidden">
+        <label id="hitlExtraLabel" for="hitlExtraText"></label>
+        <textarea id="hitlExtraText"></textarea>
+        <div class="form-row">
+          <span class="muted" style="font-size:12px">修改子任务时每行一个。</span>
+          <button type="button" id="hitlExtraSubmit" class="btn btn-primary">提交</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="reportCard" class="card report hidden">
+      <div class="report-head">
+        <h2>研究报告</h2>
+        <button type="button" id="copyBtn" class="btn btn-ghost">复制 Markdown</button>
+      </div>
+      <div id="guardrails" class="flags"></div>
+      <div id="reportBody"></div>
+    </section>
+
+    <section id="empty" class="empty">提交问题后，这里会显示研究进度与最终报告。</section>
+  </main>
+
+  <footer>Built with LangGraph · FastAPI · DeepSeek · Tavily</footer>
+
+  <script>
+    const $ = (sel) => document.querySelector(sel);
+    const state = {
+      threadId: null,
+      report: null,
+      hitlMode: null,
+      startedAt: 0,
+      pollTimer: null,
+      tickTimer: null,
+      deadline: 0,
+    };
+
+    const STATUS_TEXT = {
+      running: "研究中",
+      interrupted: "等待审批",
+      completed: "已完成",
+      error: "出错",
+    };
+
+    const show = (el) => el.classList.remove("hidden");
+    const hide = (el) => el.classList.add("hidden");
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+      }[ch]));
+    }
+
+    function safeUrl(value) {
+      try {
+        const url = new URL(value);
+        return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function renderInline(text) {
+      let html = escapeHtml(text);
+      html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+      html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (match, label, url) => {
+        const safe = safeUrl(url);
+        return safe
+          ? `<a href="${escapeHtml(safe)}" target="_blank" rel="noopener">${label}</a>`
+          : match;
+      });
+      return html;
+    }
+
+    function renderParagraphs(text) {
+      return String(text || "")
+        .split(/\n{2,}/)
+        .map((p) => `<p>${renderInline(p).replace(/\n/g, "<br>")}</p>`)
+        .join("");
+    }
+
+    function setStatus(status) {
+      const badge = $("#statusBadge");
+      badge.textContent = STATUS_TEXT[status] || status;
+      badge.className = `badge ${status}`;
+      const progress = $("#progress");
+      progress.classList.toggle("done", status === "completed");
+      progress.classList.toggle("hidden", status === "error");
+    }
+
+    function formatDuration(ms) {
+      const total = Math.max(0, Math.floor(ms / 1000));
+      const minutes = Math.floor(total / 60);
+      const seconds = total % 60;
+      return minutes ? `${minutes}m ${seconds}s` : `${seconds}s`;
+    }
+
+    function tickElapsed() {
+      if (!state.startedAt) return;
+      $("#metricElapsed").textContent = formatDuration(Date.now() - state.startedAt);
+    }
+
+    function startTimers() {
+      stopTimers();
+      tickElapsed();
+      state.tickTimer = setInterval(tickElapsed, 500);
+    }
+
+    function stopTimers() {
+      if (state.pollTimer) clearTimeout(state.pollTimer);
+      if (state.tickTimer) clearInterval(state.tickTimer);
+      state.pollTimer = null;
+      state.tickTimer = null;
+    }
+
+    function updateMetrics(data) {
+      $("#metricCalls").textContent = data.llm_calls ?? "—";
+      $("#metricIterations").textContent = data.iterations ?? "—";
+      $("#metricRepairs").textContent = data.repairs ?? 0;
+    }
+
+    function showError(message) {
+      const box = $("#errorBox");
+      box.textContent = message;
+      show(box);
+    }
+
+    function clearError() {
+      const box = $("#errorBox");
+      box.textContent = "";
+      hide(box);
+    }
+
+    async function readError(resp) {
+      try {
+        const data = await resp.json();
+        return data.detail || data.message || `请求失败（HTTP ${resp.status}）`;
+      } catch {
+        return `请求失败（HTTP ${resp.status}）`;
+      }
+    }
+
+    function clearSaved() {
+      localStorage.removeItem("dra.threadId");
+    }
+
+    function resetUI() {
+      stopTimers();
+      state.report = null;
+      state.hitlMode = null;
+      hide($("#reportCard"));
+      hide($("#hitlCard"));
+      hide($("#hitlExtra"));
+      hide($("#empty"));
+      show($("#statusCard"));
+      clearError();
+      $("#reportBody").innerHTML = "";
+      $("#guardrails").innerHTML = "";
+    }
+
+    async function startResearch(query) {
+      resetUI();
+      setStatus("running");
+      state.startedAt = Date.now();
+      state.deadline = Date.now() + 15 * 60 * 1000;
+      startTimers();
+      $("#submitBtn").disabled = true;
+
+      try {
+        const resp = await fetch("/research", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query }),
+        });
+        if (!resp.ok) {
+          showError(await readError(resp));
+          setStatus("error");
+          stopTimers();
+          return;
+        }
+        const data = await resp.json();
+        state.threadId = data.thread_id;
+        localStorage.setItem("dra.threadId", state.threadId);
+        $("#threadId").textContent = state.threadId;
+        poll();
+      } catch (error) {
+        showError(`网络错误：${error.message}`);
+        setStatus("error");
+        stopTimers();
+      } finally {
+        $("#submitBtn").disabled = false;
+      }
+    }
+
+    async function poll() {
+      if (!state.threadId) return;
+      if (Date.now() > state.deadline) {
+        showError("研究超时（15 分钟）。可以稍后用 thread_id 继续查询。");
+        setStatus("error");
+        stopTimers();
+        return;
+      }
+
+      try {
+        const resp = await fetch(`/research/${encodeURIComponent(state.threadId)}`);
+        if (resp.status === 404) {
+          clearSaved();
+          state.threadId = null;
+          showError("这个运行不存在或已过期。");
+          setStatus("error");
+          stopTimers();
+          return;
+        }
+        if (!resp.ok) {
+          showError(await readError(resp));
+          setStatus("error");
+          stopTimers();
+          return;
+        }
+        const data = await resp.json();
+        updateMetrics(data);
+
+        if (data.status === "completed") {
+          stopTimers();
+          setStatus("completed");
+          hide($("#hitlCard"));
+          renderReport(data);
+          return;
+        }
+        if (data.status === "interrupted") {
+          stopTimers();
+          setStatus("interrupted");
+          showHitl(data.interrupt || {});
+          return;
+        }
+        if (data.status === "error") {
+          stopTimers();
+          setStatus("error");
+          showError(data.error || "运行失败。");
+          return;
+        }
+
+        setStatus("running");
+        state.pollTimer = setTimeout(poll, 2000);
+      } catch (error) {
+        showError(`网络错误：${error.message}`);
+        state.pollTimer = setTimeout(poll, 4000);
+      }
+    }
+
+    function renderReport(data) {
+      const report = data.report || {};
+      state.report = report;
+      const body = $("#reportBody");
+      body.innerHTML = "";
+
+      const flags = data.guardrail_flags || [];
+      $("#guardrails").innerHTML = flags
+        .map((flag) => `<span class="flag">${escapeHtml(flag)}</span>`)
+        .join("");
+
+      if (report.summary) {
+        const summary = document.createElement("div");
+        summary.className = "summary";
+        summary.innerHTML = renderParagraphs(report.summary);
+        body.appendChild(summary);
+      }
+
+      for (const section of report.sections || []) {
+        const wrapper = document.createElement("section");
+        wrapper.className = "section";
+        wrapper.innerHTML = `<h3>${escapeHtml(section.heading || "未命名章节")}</h3>${renderParagraphs(section.content)}`;
+
+        const urls = [...new Set(section.citations || [])].filter(safeUrl);
+        if (urls.length) {
+          const cites = document.createElement("div");
+          cites.className = "section-cites";
+          for (const url of urls) {
+            const link = document.createElement("a");
+            link.href = safeUrl(url);
+            link.target = "_blank";
+            link.rel = "noopener";
+            link.textContent = new URL(url).hostname;
+            cites.appendChild(link);
+          }
+          wrapper.appendChild(cites);
+        }
+        body.appendChild(wrapper);
+      }
+
+      const citations = (report.citations || []).filter((item) => safeUrl(item.url));
+      if (citations.length) {
+        const wrapper = document.createElement("section");
+        wrapper.className = "citations";
+        wrapper.innerHTML = "<h3>参考来源</h3>";
+        const list = document.createElement("div");
+        list.className = "citation-list";
+        for (const item of citations) {
+          const row = document.createElement("div");
+          row.className = "citation";
+          const link = document.createElement("a");
+          link.href = safeUrl(item.url);
+          link.target = "_blank";
+          link.rel = "noopener";
+          link.textContent = item.title || item.url;
+          row.appendChild(link);
+          list.appendChild(row);
+        }
+        wrapper.appendChild(list);
+        body.appendChild(wrapper);
+      }
+
+      show($("#reportCard"));
+      hide($("#empty"));
+    }
+
+    function showHitl(payload) {
+      hide($("#reportCard"));
+      show($("#hitlCard"));
+      hide($("#hitlExtra"));
+      state.hitlMode = null;
+      const subtasks = payload.proposed_subtasks || [];
+      $("#hitlSubtasks").innerHTML = subtasks
+        .map((task) => `<li>${escapeHtml(task)}</li>`)
+        .join("");
+      $("#hitlExtraText").value = subtasks.join("\n");
+    }
+
+    function openHitlExtra(mode) {
+      state.hitlMode = mode;
+      show($("#hitlExtra"));
+      if (mode === "edit") {
+        $("#hitlExtraLabel").textContent = "修改子任务（每行一个）";
+        $("#hitlExtraText").value = [...$("#hitlSubtasks").children]
+          .map((item) => item.textContent)
+          .join("\n");
+      } else {
+        $("#hitlExtraLabel").textContent = "给规划器的反馈";
+        $("#hitlExtraText").value = "";
+      }
+      $("#hitlExtraText").focus();
+    }
+
+    async function resume(decision) {
+      if (!state.threadId) return;
+      try {
+        const resp = await fetch(`/research/${encodeURIComponent(state.threadId)}/resume`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(decision),
+        });
+        if (!resp.ok) {
+          showError(await readError(resp));
+          return;
+        }
+        hide($("#hitlCard"));
+        clearError();
+        setStatus("running");
+        state.startedAt = Date.now();
+        startTimers();
+        poll();
+      } catch (error) {
+        showError(`网络错误：${error.message}`);
+      }
+    }
+
+    function reportToMarkdown(report) {
+      let markdown = `# 研究报告\n\n## 摘要\n${report.summary || ""}\n\n`;
+      for (const section of report.sections || []) {
+        markdown += `## ${section.heading || "未命名章节"}\n${section.content || ""}\n\n`;
+      }
+      const citations = report.citations || [];
+      if (citations.length) {
+        markdown += "## 参考来源\n";
+        for (const item of citations) {
+          markdown += `- [${item.title || item.url}](${item.url})\n`;
+        }
+      }
+      return markdown;
+    }
+
+    async function copyReport() {
+      if (!state.report) return;
+      const markdown = reportToMarkdown(state.report);
+      try {
+        await navigator.clipboard.writeText(markdown);
+      } catch {
+        const area = document.createElement("textarea");
+        area.value = markdown;
+        document.body.appendChild(area);
+        area.select();
+        document.execCommand("copy");
+        area.remove();
+      }
+      const button = $("#copyBtn");
+      const original = button.textContent;
+      button.textContent = "已复制";
+      setTimeout(() => { button.textContent = original; }, 1500);
+    }
+
+    async function checkHealth() {
+      const dot = $("#healthDot");
+      const text = $("#healthText");
+      try {
+        const resp = await fetch("/health");
+        const data = await resp.json();
+        const ok = data.status === "ok";
+        dot.className = `dot ${ok ? "ok" : "bad"}`;
+        text.textContent = ok ? "API 在线" : "API 异常";
+      } catch {
+        dot.className = "dot bad";
+        text.textContent = "API 离线";
+      }
+    }
+
+    $("#researchForm").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const query = $("#query").value.trim();
+      if (query.length < 6) {
+        showError("请输入一个具体的研究问题（至少 6 个字符）。");
+        $("#statusCard").classList.remove("hidden");
+        return;
+      }
+      startResearch(query);
+    });
+
+    document.querySelectorAll(".chip").forEach((button) => {
+      button.addEventListener("click", () => {
+        $("#query").value = button.dataset.q || "";
+        $("#query").focus();
+      });
+    });
+
+    document.querySelectorAll("[data-action]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const action = button.dataset.action;
+        if (action === "edit" || action === "reject") {
+          openHitlExtra(action);
+          return;
+        }
+        resume({ action });
+      });
+    });
+
+    $("#hitlExtraSubmit").addEventListener("click", () => {
+      const text = $("#hitlExtraText").value;
+      if (state.hitlMode === "edit") {
+        const subtasks = text.split("\n").map((line) => line.trim()).filter(Boolean);
+        if (!subtasks.length) {
+          showError("至少保留一个子任务。");
+          return;
+        }
+        resume({ action: "edit", subtasks });
+      } else {
+        resume({ action: "reject", feedback: text.trim() });
+      }
+    });
+
+    $("#copyBtn").addEventListener("click", copyReport);
+
+    window.addEventListener("DOMContentLoaded", () => {
+      checkHealth();
+      const saved = localStorage.getItem("dra.threadId");
+      if (saved) {
+        state.threadId = saved;
+        $("#threadId").textContent = saved;
+        show($("#statusCard"));
+        hide($("#empty"));
+        state.startedAt = Date.now();
+        state.deadline = Date.now() + 15 * 60 * 1000;
+        startTimers();
+        poll();
+      }
+    });
+  </script>
+</body>
+</html>

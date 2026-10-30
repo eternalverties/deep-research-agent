@@ -26,6 +26,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+research_agent = ["static/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["eval: 端到端质量评测（慢，会真实调用 LLM）"]

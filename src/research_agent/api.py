@@ -12,9 +12,11 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 from pydantic import BaseModel, Field
@@ -22,6 +24,8 @@ from pydantic import BaseModel, Field
 from research_agent.config import settings
 from research_agent.graph import build_graph
 from research_agent.persistence import sqlite_saver
+
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 class ResearchRequest(BaseModel):
@@ -194,6 +198,10 @@ def create_api(graph=None) -> FastAPI:
     @api.get("/health")
     def health() -> dict:
         return {"status": "ok"}
+
+    @api.get("/", include_in_schema=False)
+    def index() -> FileResponse:
+        return FileResponse(_STATIC_DIR / "index.html")
 
     @api.post("/research", response_model=ResearchAccepted, status_code=202)
     def start_research(req: ResearchRequest, request: Request) -> ResearchAccepted:

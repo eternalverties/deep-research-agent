@@ -71,6 +71,14 @@ def test_health() -> None:
         assert client.get("/health").json() == {"status": "ok"}
 
 
+def test_index_serves_frontend() -> None:
+    with TestClient(create_api(graph=StubGraph())) as client:
+        resp = client.get("/")
+        assert resp.status_code == 200
+        assert "Deep Research Agent" in resp.text
+        assert 'id="researchForm"' in resp.text
+
+
 def test_start_and_poll_to_completion() -> None:
     with TestClient(create_api(graph=StubGraph())) as client:
         resp = client.post("/research", json={"query": "测试问题"})

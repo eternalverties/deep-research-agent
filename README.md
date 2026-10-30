@@ -96,6 +96,10 @@ Planner 生成计划后图会暂停，展示子任务并等待你选择 approve 
 .venv\Scripts\python.exe -m uvicorn research_agent.api:api --host 0.0.0.0 --port 8000
 ```
 
+启动后打开 http://127.0.0.1:8000/ 即可使用内置单页前端：输入研究问题、实时轮询状态、
+渲染摘要/分节/引用、展示模型调用与护栏指标；开启 HITL 时会弹出子任务审批面板，
+支持 approve / edit / reject / abort。API 调试页仍在 `/docs`。
+
 提交任务（返回 202 + thread_id）：
 
 ```bash
