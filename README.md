@@ -68,6 +68,9 @@ python -m venv .venv
 - `DEEPSEEK_API_KEY`：DeepSeek 模型密钥（https://platform.deepseek.com）
 - `TAVILY_API_KEY`：Tavily 联网搜索密钥（https://tavily.com，有免费额度）
 
+搜索默认 `SEARCH_PROVIDER=auto`：优先 Tavily，遇到额度/限流/服务不可用时自动切换
+DuckDuckGo。也可以显式设 `SEARCH_PROVIDER=duckduckgo`，完全不需要搜索 key。
+
 ### 4. 运行 M1：最小 ReAct 智能体
 
 ```bash
@@ -165,14 +168,15 @@ docker run --env-file .env -p 8000:8000 deep-research-agent
 
 评测包含三项质量门槛：LLM-as-judge 的忠实度与覆盖度，以及程序化引用准确率；
 另外输出 Claim 支持率作为诊断指标。门槛由 `EVAL_MIN_*` 环境变量控制。
-当前有 60 个离线测试通过，1 个端到端质量门槛测试按需运行。
+当前有 64 个离线测试通过，1 个端到端质量门槛测试按需运行。
 
 Claim-Evidence 版本之前的完整样例结果为忠实度 0.9、覆盖度 0.83、引用准确率 1.0。
 加入 Claim-Evidence 后重测时 Tavily 返回 `Error 432`（免费额度用尽），因此暂未用新链路
 完成完整评测；更换有额度的 key 后运行 `python -m evals.run_evals --max-cases 1` 更新。
 
-基础设施错误会被明确区分：Tavily 返回 429/432/5xx 时研究员提前结束，API 和前端显示
-「检索服务不可用」，评测标记 `infrastructure_error`，不会把搜索故障误报成质量下降。
+基础设施错误会被明确区分：Tavily 返回 429/432/5xx 时先尝试 DuckDuckGo 降级；
+两者都失败才让研究员提前结束，API 和前端显示「检索服务不可用」，评测标记
+`infrastructure_error`，不会把搜索故障误报成质量下降。
 
 CI 工作流在 `.github/workflows/`：`ci.yml` 每次 push/PR 跑 lint 与离线测试；
 `evals.yml` 在 PR 上跑质量评测，需要在仓库 Secrets 中配置 `DEEPSEEK_API_KEY`
@@ -205,6 +209,8 @@ CI 工作流在 `.github/workflows/`：`ci.yml` 每次 push/PR 跑 lint 与离�
   系统自动触发重写并删除无法核实的数字。
 - 内置节点级执行轨迹（耗时、模型调用数、并行研究员明细），通过 API 和前端时间线展示；
   支持 LangSmith 查看完整调用树，并对搜索额度/限流错误做快速失败与明确提示。
+- 实现搜索提供方降级：Tavily 额度/限流失败时自动切换 DuckDuckGo，统一结果结构，
+  也支持零 key 的纯 DuckDuckGo 模式。
 - 使用 FastAPI 提交-轮询 API 与 Docker 封装长任务服务，支持异步研究任务与人工审批。
 
 ## 参考实现
