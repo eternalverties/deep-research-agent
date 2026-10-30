@@ -1,0 +1,37 @@
+name: Agent Evals
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e . pytest
+
+      - name: Check API secrets
+        id: check
+        env:
+          DS_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          TV_KEY: ${{ secrets.TAVILY_API_KEY }}
+        run: |
+          if [ -n "$DS_KEY" ] && [ -n "$TV_KEY" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::DEEPSEEK_API_KEY / TAVILY_API_KEY 未配置，跳过质量评测"
+          fi
+
+      - name: Run LLM-as-judge evals
+        if: steps.check.outputs.ready == 'true'
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          EVAL_MAX_CASES: "2"
+        run: pytest -m eval -q

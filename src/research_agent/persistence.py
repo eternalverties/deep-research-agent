@@ -12,8 +12,8 @@ import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+from langgraph.checkpoint.sqlite import SqliteSaver
 
 from research_agent.config import settings
 

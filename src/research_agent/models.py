@@ -4,7 +4,7 @@
 这样换模型（DeepSeek → Qwen → OpenAI）只改配置字符串，不改任何业务代码。
 """
 
-from functools import lru_cache
+from functools import cache
 
 from langchain.chat_models import init_chat_model
 
@@ -19,7 +19,7 @@ _SPEC_BY_ROLE = {
 }
 
 
-@lru_cache(maxsize=None)
+@cache
 def get_model(role: str):
     """按逻辑角色返回一个 chat model；结果缓存，避免重复初始化。"""
     spec = _SPEC_BY_ROLE[role]

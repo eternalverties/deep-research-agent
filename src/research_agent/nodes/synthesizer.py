@@ -134,11 +134,11 @@ def _unique_urls(text: str) -> list[str]:
 def _parse_markdown_report(text: str) -> dict:
     """把 Markdown 报告确定性地解析成 summary / sections / citations。"""
     text = text or ""
-    summary_match = re.search(r"##\s*摘要\s*\n(.*?)(?=\n##\s|\Z)", text, re.S)
+    summary_match = re.search(r"##\s*摘要\s*\n(.*?)(?=\n##\s|\Z)", text, re.DOTALL)
     summary = summary_match.group(1).strip() if summary_match else ""
 
     sections: list[dict] = []
-    for match in re.finditer(r"##\s+(.+?)\s*\n(.*?)(?=\n##\s|\Z)", text, re.S):
+    for match in re.finditer(r"##\s+(.+?)\s*\n(.*?)(?=\n##\s|\Z)", text, re.DOTALL):
         heading = match.group(1).strip()
         content = match.group(2).strip()
         if heading in {"摘要", "参考来源", "参考资料"}:
@@ -174,10 +174,12 @@ def synthesizer_node(state: dict) -> dict:
         ("system", _SYNTH_SYSTEM),
         (
             "human",
-            f"原始问题：{state['query']}\n\n"
-            f"研究发现：\n{_group_findings(findings)}\n\n"
-            f"可用来源清单（只能引用这些 URL）：\n{_source_catalog(findings)}\n\n"
-            f"修复要求：{repair_notes}",
+            (
+                f"原始问题：{state['query']}\n\n"
+                f"研究发现：\n{_group_findings(findings)}\n\n"
+                f"可用来源清单（只能引用这些 URL）：\n{_source_catalog(findings)}\n\n"
+                f"修复要求：{repair_notes}"
+            ),
         ),
     ]
     structured = get_model("synthesizer").with_structured_output(ResearchReport)

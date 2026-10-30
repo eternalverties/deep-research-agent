@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     min_citation_coverage: float = 0.8
     max_output_repairs: int = 1
 
+    # 评测门槛：CI 上均值低于这些分数即判失败。
+    eval_min_faithfulness: float = 0.7
+    eval_min_coverage: float = 0.6
+    eval_min_citation_accuracy: float = 0.8
+    eval_max_cases: int = 0  # 0 表示跑完整数据集
+
     # 研究循环与预算上限（M4 用到）：迭代次数 + LLM 调用次数双重封顶。
     max_research_iterations: int = 2
     # 5 个研究员一轮通常要 20+ 次调用，40 留出一次反思补研的余量，同时仍能兜底。

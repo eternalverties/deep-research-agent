@@ -19,6 +19,9 @@ dist/
 build/
 *.egg-info/
 
+# 评测结果（本地产物）
+evals/results/
+
 # IDE / 系统
 .idea/
 .vscode/

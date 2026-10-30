@@ -1,7 +1,6 @@
 """M3 的 CI 安全测试：验证动态 fan-out 的路由与 URL 提取，不联网。"""
 
-from langgraph.graph import END
-from langgraph.graph import START, StateGraph
+from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
 from research_agent.graph import route_to_researchers

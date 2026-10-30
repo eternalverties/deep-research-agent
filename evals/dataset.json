@@ -1,0 +1,38 @@
+[
+  {
+    "id": "remote-work",
+    "query": "远程办公对软件团队协作效率的影响是什么？",
+    "expected_points": [
+      "混合办公对绩效影响不显著，但可降低离职率",
+      "全远程会使协作网络更孤岛化、跨组协作减少",
+      "影响取决于指标类型、任务耦合度与远程强度"
+    ]
+  },
+  {
+    "id": "langgraph-vs-crewai",
+    "query": "LangGraph 和 CrewAI 在多智能体编排上的主要区别是什么？",
+    "expected_points": [
+      "LangGraph 由开发者显式定义控制流，CrewAI 更偏角色化与自主协作",
+      "LangGraph 的状态与 checkpoint 持久化能力更强",
+      "LangGraph 适合可审计、复杂流程，CrewAI 更适合快速原型"
+    ]
+  },
+  {
+    "id": "agent-enterprise",
+    "query": "大模型 Agent 在企业落地时面临的主要技术挑战是什么？",
+    "expected_points": [
+      "长任务可靠性与错误累积",
+      "工具调用、上下文管理与多智能体协调",
+      "安全权限、可观测性与评测不足"
+    ]
+  },
+  {
+    "id": "rag-vs-finetune",
+    "query": "RAG 和微调的适用场景与主要取舍是什么？",
+    "expected_points": [
+      "RAG 更适合知识频繁更新与需要溯源的场景",
+      "微调更适合固定任务格式、风格或领域行为",
+      "两者可以组合使用，并需权衡成本、延迟与维护"
+    ]
+  }
+]

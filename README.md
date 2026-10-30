@@ -4,7 +4,19 @@
 「输入护栏 → 任务拆解 → （可选人工审批）→ 并行联网研究 → 覆盖度反思 → 生成带真实引用的报告
 → 输出护栏校验」的完整闭环。
 
-> 施工中。已跑通 M0（环境）与 M1（最小 ReAct 智能体），后续里程碑按计划推进。
+## 架构
+
+```
+START → 输入护栏 → Planner → HITL 审批 →（Send × N）→ 并行研究员
+                          ↑                                │
+                          └──────── Critic 覆盖不足 ────────┘
+                                                           ↓
+                                      Synthesizer → 输出护栏 → END
+```
+
+几个关键设计：共享状态用 TypedDict，`findings` 与 `llm_calls` 用 reducer 支持并行累加；
+SQLite checkpoint 以 `thread_id` 持久化每个超步，支撑断点续跑与人工审批；
+FastAPI 采用 202 提交 + 轮询，避免长任务阻塞 HTTP 连接。
 
 ## 快速开始
 
@@ -109,6 +121,29 @@ docker run --env-file .env -p 8000:8000 deep-research-agent
 可观测：设置 `LANGSMITH_TRACING=true` 与 `LANGSMITH_API_KEY` 后，每次运行会带上
 `run_name` 与角色模型元数据，可在 LangSmith 查看完整调用树。
 
+### 8. 评测与 CI（M8）
+
+默认测试只跑离线单元测试：
+
+```bash
+.venv\Scripts\python.exe -m pytest -q
+```
+
+端到端质量评测（会真实调用模型）：
+
+```bash
+.venv\Scripts\python.exe -m pytest -m eval -q
+.venv\Scripts\python.exe -m evals.run_evals --max-cases 1
+```
+
+评测包含三项指标：LLM-as-judge 的忠实度与覆盖度，以及程序化引用准确率。门槛由
+`EVAL_MIN_*` 环境变量控制。最近一次真实样例结果：忠实度 0.9、覆盖度 0.83、
+引用准确率 1.0，全部通过。
+
+CI 工作流在 `.github/workflows/`：`ci.yml` 每次 push/PR 跑 lint 与离线测试；
+`evals.yml` 在 PR 上跑质量评测，需要在仓库 Secrets 中配置 `DEEPSEEK_API_KEY`
+与 `TAVILY_API_KEY`（未配置时自动跳过并给出警告）。
+
 ## 进度
 
 - [x] M0 项目骨架与依赖环境
@@ -119,7 +154,17 @@ docker run --env-file .env -p 8000:8000 deep-research-agent
 - [x] M5 结构化引用报告 + 输出护栏
 - [x] M6 持久化 + 人在回路
 - [x] M7 服务化 + 可观测 + 打包
-- [ ] M8 评测 + CI
+- [x] M8 评测 + CI
+
+## 简历要点
+
+- 基于 LangGraph 从零实现多智能体深度研究系统：Planner 动态拆解、`Send` 并行 fan-out、
+  Critic 有界反思、Synthesizer 输出结构化引用报告。
+- 设计 SQLite checkpoint + `thread_id` 的持久化执行与 HITL 审批闸门，支持进程崩溃后
+  断点续跑，并用迭代次数与模型调用预算双重封顶控制成本。
+- 实现引用真实性护栏（覆盖率校验、PII/提示词扫描、有界修复）与评测体系
+  （LLM-as-judge + 程序化指标 + CI 质量门槛）。
+- 使用 FastAPI 提交-轮询 API 与 Docker 封装长任务服务，支持异步研究任务与人工审批。
 
 ## 参考实现
 

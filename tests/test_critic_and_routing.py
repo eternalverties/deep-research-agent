@@ -4,8 +4,8 @@ from langgraph.graph import END
 
 from research_agent.config import settings
 from research_agent.graph import route_after_critic, route_after_input_guard
-from research_agent.nodes.input_guard import input_guard_node
 from research_agent.nodes.critic import CriticVerdict
+from research_agent.nodes.input_guard import input_guard_node
 
 
 def test_stop_when_sufficient() -> None:

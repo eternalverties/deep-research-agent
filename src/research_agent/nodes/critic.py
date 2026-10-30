@@ -50,9 +50,11 @@ def critic_node(state: dict) -> dict:
             ("system", _CRITIC_SYSTEM),
             (
                 "human",
-                f"原始问题：{state['query']}\n\n"
-                f"已拆解的子任务：\n{subtasks}\n\n"
-                f"已有发现：\n{_findings_digest(unique_findings)}",
+                (
+                    f"原始问题：{state['query']}\n\n"
+                    f"已拆解的子任务：\n{subtasks}\n\n"
+                    f"已有发现：\n{_findings_digest(unique_findings)}"
+                ),
             ),
         ]
     )

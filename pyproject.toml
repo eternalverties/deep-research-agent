@@ -29,6 +29,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["eval: 端到端质量评测（慢，会真实调用 LLM）"]
+addopts = "-m 'not eval'"
 
 [tool.ruff]
 target-version = "py312"

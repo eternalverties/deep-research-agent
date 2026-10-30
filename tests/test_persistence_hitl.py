@@ -3,8 +3,8 @@
 from typing import TypedDict
 
 import pytest
-from langgraph.graph import END, START, StateGraph
 from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, Send, interrupt
 
 from research_agent.config import settings
