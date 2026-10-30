@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 from operator import add
-from typing import Annotated, TypedDict
+from typing import Annotated, Literal, TypedDict
 
 from pydantic import BaseModel
 
@@ -22,10 +22,35 @@ class Finding(BaseModel):
     source_title: str = ""
 
 
+class Evidence(BaseModel):
+    """一条可引用的证据片段（来自搜索结果正文）。"""
+
+    evidence_id: str
+    source_url: str
+    source_title: str = ""
+    quote: str = ""
+    score: float = 0.0
+
+
+class Claim(BaseModel):
+    """报告中的一条原子事实陈述及其核验结果。"""
+
+    claim_id: str
+    content: str
+    cited_urls: list[str] = []
+    status: Literal["supported", "contradicted", "insufficient"] = "insufficient"
+    confidence: float = 0.0
+    evidence_ids: list[str] = []
+    reason: str = ""
+
+
 class ResearchState(TypedDict, total=False):
     query: str
     subtasks: list[str]
     findings: Annotated[list[Finding], add]
+    evidence: Annotated[list[Evidence], add]
+    claims: list[Claim]
+    verification: dict
     report: dict
     citations: list[str]
     iterations: int
@@ -34,6 +59,7 @@ class ResearchState(TypedDict, total=False):
     # 护栏与预算
     rejected: bool
     rejection_reason: str
+    infrastructure_error: str
     llm_calls: Annotated[int, add]
     repairs: int
     repair_notes: str

@@ -62,6 +62,10 @@ class ResearchStatus(BaseModel):
     llm_calls: int | None = None
     iterations: int | None = None
     repairs: int | None = None
+    verification: dict | None = None
+    claims: list[dict] | None = None
+    evidence: list[dict] | None = None
+    infrastructure_error: str | None = None
     error: str | None = None
     interrupt: dict | None = None
 
@@ -139,6 +143,10 @@ def _pending_interrupt(snapshot) -> dict | None:
     return None
 
 
+def _dump_items(items) -> list[dict]:
+    return [item.model_dump() if hasattr(item, "model_dump") else item for item in items or []]
+
+
 def _read_status(graph, registry: JobRegistry, thread_id: str) -> ResearchStatus:
     snapshot = graph.get_state(_run_config(thread_id))
     values = snapshot.values or {}
@@ -157,6 +165,7 @@ def _read_status(graph, registry: JobRegistry, thread_id: str) -> ResearchStatus
         raise HTTPException(status_code=404, detail=f"Unknown thread_id: {thread_id}")
 
     report = values.get("report")
+    completed = status == "completed"
     return ResearchStatus(
         thread_id=thread_id,
         status=status,
@@ -165,6 +174,10 @@ def _read_status(graph, registry: JobRegistry, thread_id: str) -> ResearchStatus
         llm_calls=values.get("llm_calls"),
         iterations=values.get("iterations"),
         repairs=values.get("repairs"),
+        verification=values.get("verification") if completed else None,
+        claims=_dump_items(values.get("claims")) if completed else None,
+        evidence=_dump_items(values.get("evidence")) if completed else None,
+        infrastructure_error=values.get("infrastructure_error"),
         error=error,
         interrupt=interrupt_payload,
     )

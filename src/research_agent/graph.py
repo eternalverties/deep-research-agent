@@ -1,17 +1,18 @@
-"""M6 · 持久化 + 人在回路的多智能体研究图。
+"""多智能体研究图：规划、并行研究、反思、Claim-Evidence 核验与输出护栏。
 
 当前链路：
     START → input_guard → planner → approval →（Send × N，并行 researcher）→ critic
                             ↑                                                │
                             └──────── 覆盖不足且未到上限 ────────────────────┘
                                                                              ↓
-                                       synthesizer → output_guard → END
-                                            ↑             │
-                                            └── 需修复 ───┘
+                                 synthesizer → verifier → output_guard → END
+                                      ↑                        │
+                                      └──────── 需修复 ────────┘
 
 Planner 决定运行时开多少个研究员；findings 通过 reducer 跨并行分支累加；
 Critic 判断覆盖是否充分；Synthesizer 生成 summary/sections/citations；
-Output Guard 校验每条引用是否真的来自检索结果，不合格则有界重写一次。
+Verifier 把报告拆成原子断言并对照证据片段判断支持/矛盾/不足；
+Output Guard 校验引用来源、内容安全与事实核验结果，不合格则有界重写一次。
 approval 是人在回路闸门：仅在开启 HITL 且是首版计划时暂停。
 """
 
@@ -33,6 +34,7 @@ from research_agent.nodes.output_guard import output_guard_node
 from research_agent.nodes.planner import planner_node
 from research_agent.nodes.researcher import researcher_node
 from research_agent.nodes.synthesizer import synthesizer_node
+from research_agent.nodes.verifier import verifier_node
 from research_agent.persistence import sqlite_saver
 from research_agent.reporting import render_report_markdown
 from research_agent.state import ResearchState
@@ -79,7 +81,10 @@ def route_after_critic(state: ResearchState) -> str:
     双重封顶保证它不会无限循环：迭代次数与 LLM 调用预算是两道闸。
     """
     iterations = state.get("iterations", 0)
-    budget_spent = state.get("llm_calls", 0) >= settings.max_llm_calls_per_run
+    # 给合成 + 核验 + 有界修复预留预算，避免研究阶段把总额度吃光。
+    budget_spent = state.get("llm_calls", 0) >= (
+        settings.max_llm_calls_per_run - settings.budget_reserve_for_synthesis
+    )
     if (
         state.get("_sufficient")
         or iterations >= settings.max_research_iterations
@@ -89,9 +94,30 @@ def route_after_critic(state: ResearchState) -> str:
     return "planner"
 
 
+def route_after_researchers(state: ResearchState) -> str:
+    """搜索服务不可用时不继续烧模型调用，直接给出基础设施错误。"""
+    return "fail" if state.get("infrastructure_error") else "critic"
+
+
+def fail_node(state: ResearchState) -> dict:
+    reason = state.get("infrastructure_error") or "检索服务不可用"
+    return {
+        "report": {
+            "summary": f"检索服务不可用：{reason}",
+            "sections": [],
+            "citations": [],
+        }
+    }
+
+
 def route_after_output_guard(state: ResearchState) -> str:
     """引用/内容校验不合格时回到 synthesizer 修复；否则交卷。"""
     return "synthesizer" if state.get("_needs_repair") else END
+
+
+def route_after_synthesizer(state: ResearchState) -> str:
+    """开启核验时先过 Verifier，否则直接交给输出护栏。"""
+    return "verifier" if settings.enable_verifier else "output_guard"
 
 
 def build_graph(checkpointer=None):
@@ -106,16 +132,22 @@ def build_graph(checkpointer=None):
     graph.add_node("approval", approval_node)
     graph.add_node("researcher", researcher_node, retry_policy=RETRY_POLICY)
     graph.add_node("critic", critic_node, retry_policy=RETRY_POLICY)
+    graph.add_node("fail", fail_node)
     graph.add_node("synthesizer", synthesizer_node, retry_policy=RETRY_POLICY)
+    graph.add_node("verifier", verifier_node, retry_policy=RETRY_POLICY)
     graph.add_node("output_guard", output_guard_node)
 
     graph.add_edge(START, "input_guard")
     graph.add_conditional_edges("input_guard", route_after_input_guard, ["planner", END])
     graph.add_conditional_edges("planner", route_after_planner, ["approval", END])
     graph.add_conditional_edges("approval", route_after_approval, ["planner", "researcher", END])
-    graph.add_edge("researcher", "critic")
+    graph.add_conditional_edges("researcher", route_after_researchers, ["critic", "fail"])
+    graph.add_edge("fail", END)
     graph.add_conditional_edges("critic", route_after_critic, ["planner", "synthesizer"])
-    graph.add_edge("synthesizer", "output_guard")
+    graph.add_conditional_edges(
+        "synthesizer", route_after_synthesizer, ["verifier", "output_guard"]
+    )
+    graph.add_edge("verifier", "output_guard")
     graph.add_conditional_edges("output_guard", route_after_output_guard, ["synthesizer", END])
     return graph.compile(checkpointer=checkpointer)
 
@@ -207,6 +239,9 @@ def main() -> None:
     if result.get("_aborted"):
         print("研究已中止：", (result.get("report") or {}).get("summary", ""))
         return
+    if result.get("infrastructure_error"):
+        print("检索服务不可用：", result["infrastructure_error"])
+        return
     print(render_report_markdown(result.get("report") or {}))
     if result.get("guardrail_flags"):
         print("⚠ 输出护栏标记：")
@@ -218,6 +253,14 @@ def main() -> None:
     print("迭代轮数：", result.get("iterations", 0))
     print("覆盖是否充分：", result.get("_sufficient", False))
     print("输出修复次数：", result.get("repairs", 0))
+    verification = result.get("verification") or {}
+    if verification:
+        print(
+            "事实核验："
+            f"支持 {verification.get('supported', 0)} / "
+            f"矛盾 {verification.get('contradicted', 0)} / "
+            f"证据不足 {verification.get('insufficient', 0)}"
+        )
 
 
 if __name__ == "__main__":

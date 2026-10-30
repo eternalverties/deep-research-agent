@@ -21,6 +21,12 @@ class JudgeScore(BaseModel):
     reason: str = ""
 
 
+def _field(item, name: str, default: str = ""):
+    if isinstance(item, dict):
+        return item.get(name, default)
+    return getattr(item, name, default)
+
+
 _FAITHFULNESS_SYSTEM = """你是严格的事实核查员。
 判断【报告】中的事实性断言是否都能由【研究素材】支持。
 规则：
@@ -94,23 +100,47 @@ def evaluate(
                 "max_concurrency": 3,
             },
         )
+        infrastructure_error = result.get("infrastructure_error")
+        if infrastructure_error:
+            results.append(
+                {
+                    "id": case["id"],
+                    "infrastructure_error": infrastructure_error,
+                    "faithfulness": None,
+                    "coverage": None,
+                    "citation_accuracy": None,
+                    "claim_support_rate": None,
+                    "reason": {},
+                }
+            )
+            continue
+
         report = result.get("report") or {}
         findings = result.get("findings") or []
+        evidence = result.get("evidence") or []
         report_text = render_report_markdown(report)
         findings_text = "\n".join(
-            f"- {getattr(f, 'claim', '')}（{getattr(f, 'source_url', '')}）"
+            f"- {_field(f, 'claim')}（{_field(f, 'source_url')}）"
             for f in findings
         )
+        evidence_text = "\n".join(
+            f"- {_field(item, 'quote')[:600]}（{_field(item, 'source_url')}）"
+            for item in evidence[:30]
+        )
+        if evidence_text:
+            findings_text += "\n\n证据片段：\n" + evidence_text
 
         faithfulness = faithfulness_fn(case["query"], report_text, findings_text)
         coverage = coverage_fn(case["query"], case["expected_points"], report_text)
         citation = citation_fn(report, findings)
+        verification = result.get("verification") or {}
         results.append(
             {
                 "id": case["id"],
                 "faithfulness": round(faithfulness.score, 3),
                 "coverage": round(coverage.score, 3),
                 "citation_accuracy": round(citation, 3),
+                "claim_support_rate": round(float(verification.get("coverage", 0.0)), 3),
                 "reason": {
                     "faithfulness": faithfulness.reason,
                     "coverage": coverage.reason,
@@ -118,17 +148,24 @@ def evaluate(
             }
         )
 
+    scored = [item for item in results if item.get("faithfulness") is not None]
+    errors = [item for item in results if item.get("infrastructure_error")]
     means = {
-        "faithfulness": round(statistics.mean(r["faithfulness"] for r in results), 3)
-        if results
+        "faithfulness": round(statistics.mean(r["faithfulness"] for r in scored), 3)
+        if scored
         else 0.0,
-        "coverage": round(statistics.mean(r["coverage"] for r in results), 3)
-        if results
+        "coverage": round(statistics.mean(r["coverage"] for r in scored), 3)
+        if scored
         else 0.0,
         "citation_accuracy": round(
-            statistics.mean(r["citation_accuracy"] for r in results), 3
+            statistics.mean(r["citation_accuracy"] for r in scored), 3
         )
-        if results
+        if scored
+        else 0.0,
+        "claim_support_rate": round(
+            statistics.mean(r["claim_support_rate"] for r in scored), 3
+        )
+        if scored
         else 0.0,
     }
     thresholds = {
@@ -136,9 +173,14 @@ def evaluate(
         "coverage": settings.eval_min_coverage,
         "citation_accuracy": settings.eval_min_citation_accuracy,
     }
-    return {
-        "passed": passes_thresholds(means, thresholds),
+    result = {
+        "passed": bool(scored)
+        and not errors
+        and passes_thresholds(means, thresholds),
         "means": means,
         "thresholds": thresholds,
         "cases": results,
     }
+    if errors:
+        result["error"] = "部分用例因检索服务不可用未完成"
+    return result

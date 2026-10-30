@@ -16,6 +16,36 @@ _REPORT = {
     "citations": [{"title": "A", "url": "https://a.com"}],
 }
 
+_VERIFICATION = {
+    "supported": 1,
+    "contradicted": 0,
+    "insufficient": 0,
+    "total": 1,
+    "coverage": 1.0,
+}
+
+_CLAIMS = [
+    {
+        "claim_id": "c1",
+        "content": "测试断言",
+        "cited_urls": ["https://a.com"],
+        "status": "supported",
+        "confidence": 0.9,
+        "evidence_ids": ["ev-1"],
+        "reason": "证据支持",
+    }
+]
+
+_EVIDENCE = [
+    {
+        "evidence_id": "ev-1",
+        "source_url": "https://a.com",
+        "source_title": "A",
+        "quote": "证据正文",
+        "score": 0.9,
+    }
+]
+
 
 class StubGraph:
     def __init__(self, interrupt_first: bool = False) -> None:
@@ -28,7 +58,15 @@ class StubGraph:
         if isinstance(inputs, Command):
             self.paused = False
             self.next = ()
-            self.values = {"report": _REPORT, "llm_calls": 2, "iterations": 1, "repairs": 0}
+            self.values = {
+                "report": _REPORT,
+                "llm_calls": 2,
+                "iterations": 1,
+                "repairs": 0,
+                "verification": _VERIFICATION,
+                "claims": _CLAIMS,
+                "evidence": _EVIDENCE,
+            }
             return dict(self.values)
 
         if self.interrupt_first and not self.paused:
@@ -47,7 +85,15 @@ class StubGraph:
                 ]
             }
 
-        self.values = {"report": _REPORT, "llm_calls": 2, "iterations": 1, "repairs": 0}
+        self.values = {
+            "report": _REPORT,
+            "llm_calls": 2,
+            "iterations": 1,
+            "repairs": 0,
+            "verification": _VERIFICATION,
+            "claims": _CLAIMS,
+            "evidence": _EVIDENCE,
+        }
         self.next = ()
         return dict(self.values)
 
@@ -88,6 +134,9 @@ def test_start_and_poll_to_completion() -> None:
         body = _poll(client, thread_id, "completed")
         assert body["report"]["summary"] == "测试摘要"
         assert body["llm_calls"] == 2
+        assert body["verification"]["total"] == 1
+        assert body["claims"][0]["status"] == "supported"
+        assert body["evidence"][0]["evidence_id"] == "ev-1"
 
 
 def test_unknown_thread_returns_404() -> None:

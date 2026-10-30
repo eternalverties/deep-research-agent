@@ -46,7 +46,13 @@ class StubGraph:
                 "citations": [{"title": "A", "url": "https://a.com"}],
             },
             "findings": [Finding(claim="x", source_url="https://a.com")],
+            "verification": {"coverage": 0.75},
         }
+
+
+class InfraErrorGraph:
+    def invoke(self, inputs, config):
+        return {"infrastructure_error": "Error 432: usage limit exceeded"}
 
 
 def test_evaluate_aggregates_scores() -> None:
@@ -62,5 +68,16 @@ def test_evaluate_aggregates_scores() -> None:
         "faithfulness": 0.9,
         "coverage": 0.8,
         "citation_accuracy": 1.0,
+        "claim_support_rate": 0.75,
     }
     assert result["cases"][0]["id"] == "case-1"
+
+
+def test_evaluate_marks_infrastructure_error() -> None:
+    result = evaluate(
+        InfraErrorGraph(),
+        [{"id": "case-1", "query": "问题", "expected_points": ["要点"]}],
+    )
+    assert result["passed"] is False
+    assert "检索服务不可用" in result["error"]
+    assert result["cases"][0]["infrastructure_error"]

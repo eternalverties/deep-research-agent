@@ -16,6 +16,7 @@ _SPEC_BY_ROLE = {
     "synthesizer": settings.model_synthesizer,
     "critic": settings.model_critic,
     "judge": settings.model_judge,
+    "verifier": settings.model_verifier,
 }
 
 

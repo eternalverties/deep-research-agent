@@ -12,7 +12,7 @@ from research_agent.nodes.synthesizer import (
     _parse_markdown_report,
 )
 from research_agent.reporting import render_report_markdown
-from research_agent.state import Finding
+from research_agent.state import Claim, Finding
 
 
 def _report(urls: list[str]) -> dict:
@@ -91,6 +91,44 @@ def test_output_guard_ships_with_flags_after_max_repairs() -> None:
     result = output_guard_node(state)
     assert result["_needs_repair"] is False
     assert result["guardrail_flags"]
+
+
+def test_output_guard_flags_contradicted_claim() -> None:
+    state = {
+        "report": _report(["https://a.com"]),
+        "findings": [Finding(claim="x", source_url="https://a.com")],
+        "verification": {
+            "supported": 0,
+            "contradicted": 1,
+            "insufficient": 0,
+            "total": 1,
+        },
+        "claims": [
+            Claim(
+                claim_id="c1",
+                content="一个与证据矛盾的断言",
+                status="contradicted",
+                reason="证据明确相反",
+            )
+        ],
+        "repairs": 0,
+    }
+    result = output_guard_node(state)
+    assert result["_needs_repair"] is True
+    assert "矛盾断言" in result["repair_notes"]
+    assert "一个与证据矛盾的断言" in result["repair_notes"]
+
+
+def test_output_guard_skips_repair_when_budget_exhausted() -> None:
+    state = {
+        "report": _report(["https://fake.com"]),
+        "findings": [Finding(claim="x", source_url="https://a.com")],
+        "repairs": 0,
+        "llm_calls": settings.max_llm_calls_per_run,
+    }
+    result = output_guard_node(state)
+    assert result["_needs_repair"] is False
+    assert any("预算不足" in flag for flag in result["guardrail_flags"])
 
 
 def test_research_report_schema() -> None:

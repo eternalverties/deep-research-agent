@@ -8,15 +8,18 @@
 
 from __future__ import annotations
 
+import ast
+import hashlib
+import json
 import re
 from functools import lru_cache
 
 from langchain.agents import create_agent
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, ToolMessage
 
 from research_agent.guardrails import LLMCallCounter
 from research_agent.models import get_model
-from research_agent.state import Finding
+from research_agent.state import Evidence, Finding
 from research_agent.tools.search import web_search
 
 _RESEARCHER_SYSTEM = """你是一个研究执行员，只负责一个子任务。
@@ -26,6 +29,10 @@ _RESEARCHER_SYSTEM = """你是一个研究执行员，只负责一个子任务�
 # 只匹配 URL 的合法字符，遇到中文/空格/中文标点会自然停止，
 # 避免把「https://x.com/y，然后……」这类中文上下文吞进 URL。
 _URL_RE = re.compile(r"https?://[A-Za-z0-9\-._~:/?#@!$&*+;=%\[\]]+")
+_INFRA_ERROR_RE = re.compile(
+    r"(Error\s*(?:429|432|5\d\d)[^\"'\n}]*|(?:usage|rate)\s*limit[^\"'\n}]*|quota[^\"'\n}]*)",
+    re.IGNORECASE,
+)
 
 
 @lru_cache(maxsize=1)
@@ -65,6 +72,74 @@ def extract_urls(text: str) -> list[str]:
     return urls
 
 
+def _tool_results(messages) -> list[dict]:
+    """把 ToolMessage 里的 Tavily JSON 解析成 result 列表。"""
+    results: list[dict] = []
+    for message in messages:
+        if not isinstance(message, ToolMessage):
+            continue
+        text = _as_text(message.content)
+        data = None
+        try:
+            data = json.loads(text)
+        except (json.JSONDecodeError, TypeError):
+            try:
+                data = ast.literal_eval(text)
+            except (ValueError, SyntaxError):
+                continue
+        if isinstance(data, dict):
+            data = data.get("results") or []
+        if isinstance(data, list):
+            results.extend(item for item in data if isinstance(item, dict))
+    return results
+
+
+def _evidence_id(url: str, quote: str) -> str:
+    return "ev-" + hashlib.sha1(f"{url}\n{quote}".encode()).hexdigest()[:12]
+
+
+def _extract_evidence(messages) -> list[Evidence]:
+    """从工具返回的搜索结果里抽取证据片段，按 URL+正文去重。"""
+    evidence: list[Evidence] = []
+    seen: set[str] = set()
+    for item in _tool_results(messages):
+        url = str(item.get("url") or "").strip()
+        quote = str(item.get("content") or "").strip()
+        if not url or not quote:
+            continue
+        evidence_id = _evidence_id(url, quote)
+        if evidence_id in seen:
+            continue
+        seen.add(evidence_id)
+        evidence.append(
+            Evidence(
+                evidence_id=evidence_id,
+                source_url=url,
+                source_title=str(item.get("title") or ""),
+                quote=quote[:600],
+                score=float(item.get("score") or 0.0),
+            )
+        )
+    return evidence[:12]
+
+
+def _tool_errors(messages) -> list[str]:
+    """识别搜索工具返回的额度/限流/服务端错误。"""
+    errors: list[str] = []
+    for message in messages:
+        if not isinstance(message, ToolMessage):
+            continue
+        text = _as_text(message.content)
+        try:
+            data = json.loads(text)
+        except (json.JSONDecodeError, TypeError):
+            data = None
+        if isinstance(data, dict) and data.get("error"):
+            errors.append(str(data["error"]))
+        errors.extend(match.group(0).strip() for match in _INFRA_ERROR_RE.finditer(text))
+    return errors
+
+
 def researcher_node(state: dict) -> dict:
     """执行单个子任务，返回结构化发现与本次模型调用数。"""
     task = state["subtasks"][0]
@@ -75,6 +150,14 @@ def researcher_node(state: dict) -> dict:
     )
     messages = result["messages"]
     answer = _as_text(messages[-1].content)
+    errors = _tool_errors(messages)
+    if errors:
+        return {
+            "findings": [],
+            "evidence": [],
+            "llm_calls": counter.count,
+            "infrastructure_error": errors[0][:300],
+        }
 
     # 工具调用结果和最终回答里都可能出现来源 URL，统一收集。
     haystack = "\n".join(_as_text(m.content) for m in messages)
@@ -86,4 +169,8 @@ def researcher_node(state: dict) -> dict:
     else:
         findings = [Finding(claim=answer[:600], source_url="")]
 
-    return {"findings": findings, "llm_calls": counter.count}
+    return {
+        "findings": findings,
+        "evidence": _extract_evidence(messages),
+        "llm_calls": counter.count,
+    }

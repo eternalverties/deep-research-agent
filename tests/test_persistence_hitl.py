@@ -11,7 +11,7 @@ from research_agent.config import settings
 from research_agent.graph import build_graph, route_after_approval
 from research_agent.nodes.approval import approval_node
 from research_agent.persistence import sqlite_saver
-from research_agent.state import Finding
+from research_agent.state import Claim, Evidence, Finding
 
 
 @pytest.fixture
@@ -103,3 +103,42 @@ def test_checkpoint_serializes_finding(tmp_path) -> None:
 
         snapshot = app.get_state(config)
         assert snapshot.values["findings"][0].source_url == "https://a.com"
+
+
+class _EvidenceState(TypedDict):
+    evidence: list[Evidence]
+    claims: list[Claim]
+
+
+def test_checkpoint_serializes_evidence_and_claim(tmp_path) -> None:
+    def add(state: _EvidenceState) -> dict:
+        return {
+            "evidence": [
+                Evidence(
+                    evidence_id="ev-1",
+                    source_url="https://a.com",
+                    quote="证据正文",
+                )
+            ],
+            "claims": [
+                Claim(
+                    claim_id="c1",
+                    content="一个断言",
+                    status="supported",
+                    evidence_ids=["ev-1"],
+                )
+            ],
+        }
+
+    graph = StateGraph(_EvidenceState)
+    graph.add_node("add", add)
+    graph.add_edge(START, "add")
+    graph.add_edge("add", END)
+
+    config = {"configurable": {"thread_id": "evidence-1"}}
+    with sqlite_saver(str(tmp_path / "evidence.db")) as saver:
+        app = graph.compile(checkpointer=saver)
+        app.invoke({"evidence": [], "claims": []}, config=config)
+        snapshot = app.get_state(config)
+        assert snapshot.values["evidence"][0].quote == "证据正文"
+        assert snapshot.values["claims"][0].status == "supported"

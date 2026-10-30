@@ -25,9 +25,38 @@ def output_guard_node(state: dict) -> dict:
         )
     flags.extend(scan_content(render_report_markdown(report)))
 
+    verification = state.get("verification") or {}
+    if verification.get("contradicted"):
+        flags.append(f"事实核验发现 {verification['contradicted']} 条矛盾断言")
+    if verification.get("insufficient"):
+        flags.append(f"事实核验发现 {verification['insufficient']} 条证据不足断言")
+    if verification.get("error"):
+        flags.append(f"事实核验异常：{verification['error']}")
+
+    claim_notes: list[str] = []
+    for claim in state.get("claims") or []:
+        status = getattr(claim, "status", None) or (
+            claim.get("status", "") if isinstance(claim, dict) else ""
+        )
+        if status == "supported":
+            continue
+        content = getattr(claim, "content", None) or (
+            claim.get("content", "") if isinstance(claim, dict) else ""
+        )
+        reason = getattr(claim, "reason", None) or (
+            claim.get("reason", "") if isinstance(claim, dict) else ""
+        )
+        if content:
+            claim_notes.append(f"- [{status}] {content[:200]}（{reason[:160]}）")
+
     repairs = state.get("repairs", 0)
-    if flags and repairs < settings.max_output_repairs:
-        notes = "\n".join(flags) + "\n请只引用「可用来源清单」中的 URL，并修正上述问题。"
+    # 一次修复大约需要 synthesizer 1 次 + verifier 2 次调用。
+    can_repair = state.get("llm_calls", 0) + 3 <= settings.max_llm_calls_per_run
+    if flags and repairs < settings.max_output_repairs and can_repair:
+        notes = "\n".join(flags)
+        if claim_notes:
+            notes += "\n需要修正的断言：\n" + "\n".join(claim_notes[:8])
+        notes += "\n请只引用「可用来源清单」中的 URL，并修正上述问题。"
         return {
             "_needs_repair": True,
             "repair_notes": notes,
@@ -35,4 +64,6 @@ def output_guard_node(state: dict) -> dict:
             "guardrail_flags": flags,
         }
 
+    if flags and repairs < settings.max_output_repairs and not can_repair:
+        flags.append("模型调用预算不足，已跳过自动修复")
     return {"_needs_repair": False, "guardrail_flags": flags}

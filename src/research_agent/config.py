@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     model_synthesizer: str = "deepseek:deepseek-chat"
     model_critic: str = "deepseek:deepseek-chat"
     model_judge: str = "deepseek:deepseek-chat"
+    model_verifier: str = "deepseek:deepseek-chat"
 
     # 搜索服务的密钥。显式放进 Settings，避免各个工具模块隐式依赖 .env 已被加载。
     tavily_api_key: str = ""
@@ -40,7 +41,13 @@ class Settings(BaseSettings):
     # 研究循环与预算上限（M4 用到）：迭代次数 + LLM 调用次数双重封顶。
     max_research_iterations: int = 2
     # 5 个研究员一轮通常要 20+ 次调用，40 留出一次反思补研的余量，同时仍能兜底。
-    max_llm_calls_per_run: int = 40
+    max_llm_calls_per_run: int = 60
+    budget_reserve_for_synthesis: int = 6
+
+    # Claim-Evidence 事实核验
+    enable_verifier: bool = True
+    verifier_max_claims: int = 8
+    verifier_max_evidence: int = 5
 
     # 重试策略（M4 用到）：遇 429/5xx/超时按指数退避重试。
     retry_max_attempts: int = 4

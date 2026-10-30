@@ -205,6 +205,29 @@
     .citation-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 18px; }
     .citation { font-size: 13px; overflow-wrap: anywhere; }
 
+    .verification-body { display: grid; gap: 12px; margin-top: 16px; }
+    .claim-item {
+      border: 1px solid var(--line); border-radius: 14px; padding: 14px;
+      background: var(--surface-2);
+    }
+    .claim-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .claim-text { margin: 0; font-size: 14px; font-weight: 600; }
+    .status-chip {
+      flex: 0 0 auto; font-size: 11px; font-weight: 800; border-radius: 999px; padding: 4px 9px;
+      white-space: nowrap;
+    }
+    .status-chip.supported { background: rgba(5, 150, 105, 0.13); color: var(--success); }
+    .status-chip.contradicted { background: rgba(220, 38, 38, 0.13); color: var(--danger); }
+    .status-chip.insufficient { background: rgba(217, 119, 6, 0.14); color: var(--warning); }
+    .claim-reason { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+    .evidence-list { display: grid; gap: 8px; margin-top: 10px; }
+    .evidence-item {
+      border-left: 3px solid var(--accent); padding-left: 10px;
+      font-size: 12px; color: var(--muted);
+    }
+    .evidence-item a { display: block; margin-bottom: 2px; overflow-wrap: anywhere; }
+    .evidence-item div { color: var(--muted); }
+
     .empty {
       margin-top: 20px; padding: 34px 18px; text-align: center; color: var(--muted);
       border: 1px dashed var(--line); border-radius: var(--radius);
@@ -308,6 +331,14 @@
       <div id="reportBody"></div>
     </section>
 
+    <section id="verificationCard" class="card report hidden">
+      <div class="report-head">
+        <h2>证据核验</h2>
+        <span id="verificationSummary" class="muted" style="font-size:13px"></span>
+      </div>
+      <div id="verificationBody" class="verification-body"></div>
+    </section>
+
     <section id="empty" class="empty">提交问题后，这里会显示研究进度与最终报告。</section>
   </main>
 
@@ -330,6 +361,12 @@
       interrupted: "等待审批",
       completed: "已完成",
       error: "出错",
+    };
+
+    const CLAIM_TEXT = {
+      supported: "证据支持",
+      contradicted: "存在矛盾",
+      insufficient: "证据不足",
     };
 
     const show = (el) => el.classList.remove("hidden");
@@ -439,6 +476,7 @@
       state.report = null;
       state.hitlMode = null;
       hide($("#reportCard"));
+      hide($("#verificationCard"));
       hide($("#hitlCard"));
       hide($("#hitlExtra"));
       hide($("#empty"));
@@ -509,6 +547,16 @@
         }
         const data = await resp.json();
         updateMetrics(data);
+
+        if (data.infrastructure_error) {
+          stopTimers();
+          setStatus("error");
+          hide($("#hitlCard"));
+          hide($("#reportCard"));
+          hide($("#verificationCard"));
+          showError(`检索服务不可用：${data.infrastructure_error}`);
+          return;
+        }
 
         if (data.status === "completed") {
           stopTimers();
@@ -601,11 +649,87 @@
       }
 
       show($("#reportCard"));
+      renderVerification(data);
       hide($("#empty"));
+    }
+
+    function renderVerification(data) {
+      const claims = data.claims || [];
+      const card = $("#verificationCard");
+      if (!claims.length) {
+        hide(card);
+        return;
+      }
+
+      const summary = data.verification || {};
+      $("#verificationSummary").textContent =
+        `${summary.total || claims.length} 条断言 · ` +
+        `支持 ${summary.supported || 0} · ` +
+        `矛盾 ${summary.contradicted || 0} · ` +
+        `证据不足 ${summary.insufficient || 0}`;
+
+      const evidenceMap = new Map(
+        (data.evidence || []).map((item) => [item.evidence_id, item])
+      );
+      const body = $("#verificationBody");
+      body.innerHTML = "";
+
+      for (const claim of claims) {
+        const item = document.createElement("div");
+        item.className = "claim-item";
+        const status = claim.status || "insufficient";
+
+        const head = document.createElement("div");
+        head.className = "claim-head";
+        const text = document.createElement("p");
+        text.className = "claim-text";
+        text.textContent = claim.content || "";
+        const chip = document.createElement("span");
+        chip.className = `status-chip ${status}`;
+        chip.textContent = CLAIM_TEXT[status] || status;
+        head.append(text, chip);
+        item.appendChild(head);
+
+        if (claim.reason) {
+          const reason = document.createElement("p");
+          reason.className = "claim-reason";
+          reason.textContent = claim.reason;
+          item.appendChild(reason);
+        }
+
+        const evidenceIds = claim.evidence_ids || [];
+        if (evidenceIds.length) {
+          const list = document.createElement("div");
+          list.className = "evidence-list";
+          for (const evidenceId of evidenceIds) {
+            const evidence = evidenceMap.get(evidenceId);
+            if (!evidence) continue;
+            const row = document.createElement("div");
+            row.className = "evidence-item";
+            const url = safeUrl(evidence.source_url);
+            if (url) {
+              const link = document.createElement("a");
+              link.href = url;
+              link.target = "_blank";
+              link.rel = "noopener";
+              link.textContent = evidence.source_title || evidence.source_url;
+              row.appendChild(link);
+            }
+            const quote = document.createElement("div");
+            quote.textContent = evidence.quote || "";
+            row.appendChild(quote);
+            list.appendChild(row);
+          }
+          if (list.children.length) item.appendChild(list);
+        }
+        body.appendChild(item);
+      }
+      show(card);
     }
 
     function showHitl(payload) {
       hide($("#reportCard"));
+      hide($("#verificationCard"));
       show($("#hitlCard"));
       hide($("#hitlExtra"));
       state.hitlMode = null;

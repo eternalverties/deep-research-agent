@@ -17,7 +17,11 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 
 from research_agent.config import settings
 
-_ALLOWED_MSGPACK = [("research_agent.state", "Finding")]
+_ALLOWED_MSGPACK = [
+    ("research_agent.state", "Finding"),
+    ("research_agent.state", "Evidence"),
+    ("research_agent.state", "Claim"),
+]
 
 
 @contextmanager

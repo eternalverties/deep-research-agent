@@ -34,8 +34,11 @@ _SYNTH_SYSTEM = """你是研究报告综合员。基于给定「研究发现」�
 2. sections 写 3–5 节，每节有清晰小标题，内容必须来自已有发现；
 3. citations 只能从「可用来源清单」里选，绝对不能编造 URL；
 4. 每节的 citations 列出本节实际用到的 URL；
-5. 如果给出「修复要求」，必须按它修正；
+5. 如果给出「修复要求」，必须按它修正；修复时保留有证据支持的结论，只删除/弱化确实无证据的断言，不要把已有证据说成不存在；
 6. 证据不足的地方要明确写出局限，不要用常识补齐。
+7. 必须纳入与主结论相冲突或相反的重要证据，不要只选择支持性材料；
+8. 只有在素材明确缺少信息时才说证据不足，不要因为摘要里没看到数字就断言研究没有结论；
+9. 尽量保留关键数值、样本量、限定条件与适用边界。
 只输出结构化结果。"""
 
 _MD_SYSTEM = _SYNTH_SYSTEM + """
@@ -54,7 +57,7 @@ _LINK_RE = re.compile(r"\[([^\]]+)\]\((https?://[^)\s]+)\)")
 _BARE_URL_RE = re.compile(r"https?://[A-Za-z0-9\-._~:/?#@!$&*+;=%\[\]]+")
 
 
-def _group_findings(findings, max_items: int = 12, max_chars: int = 300) -> str:
+def _group_findings(findings, max_items: int = 20, max_chars: int = 400) -> str:
     grouped: dict[str, list[str]] = {}
     for item in findings or []:
         claim = item.claim if not isinstance(item, dict) else item.get("claim", "")
@@ -70,7 +73,7 @@ def _group_findings(findings, max_items: int = 12, max_chars: int = 300) -> str:
     return "\n".join(lines) if lines else "（暂无发现）"
 
 
-def _source_catalog(findings, max_urls: int = 20) -> str:
+def _source_catalog(findings, max_urls: int = 25) -> str:
     urls: list[str] = []
     for item in findings or []:
         url = item.source_url if not isinstance(item, dict) else item.get("source_url", "")
@@ -78,6 +81,23 @@ def _source_catalog(findings, max_urls: int = 20) -> str:
             urls.append(url)
     selected = urls[:max_urls]
     return "\n".join(f"- {url}" for url in selected) if selected else "（无可用来源）"
+
+
+def _evidence_digest(findings, evidence, max_items: int = 16) -> str:
+    """给综合员补充关键证据片段，避免只看到压缩后的发现摘要。"""
+    finding_urls = {
+        item.source_url if not isinstance(item, dict) else item.get("source_url", "")
+        for item in findings or []
+    }
+    selected = [item for item in evidence or [] if item.source_url in finding_urls]
+    if not selected:
+        selected = list(evidence or [])
+    lines: list[str] = []
+    for item in selected[:max_items]:
+        url = item.source_url if not isinstance(item, dict) else item.get("source_url", "")
+        quote = item.quote if not isinstance(item, dict) else item.get("quote", "")
+        lines.append(f"- [{url}] {quote[:260]}")
+    return "\n".join(lines) if lines else "（无额外证据片段）"
 
 
 def _fallback_report(findings) -> dict:
@@ -168,6 +188,7 @@ def _parse_markdown_report(text: str) -> dict:
 def synthesizer_node(state: dict) -> dict:
     """生成（或在修复时重写）结构化报告。"""
     findings = state.get("findings") or []
+    evidence = state.get("evidence") or []
     repair_notes = state.get("repair_notes") or "无"
 
     messages = [
@@ -177,6 +198,7 @@ def synthesizer_node(state: dict) -> dict:
             (
                 f"原始问题：{state['query']}\n\n"
                 f"研究发现：\n{_group_findings(findings)}\n\n"
+                f"关键证据片段：\n{_evidence_digest(findings, evidence)}\n\n"
                 f"可用来源清单（只能引用这些 URL）：\n{_source_catalog(findings)}\n\n"
                 f"修复要求：{repair_notes}"
             ),
