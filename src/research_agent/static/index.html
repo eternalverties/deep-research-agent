@@ -159,6 +159,25 @@
     .metric span { display: block; font-size: 18px; font-weight: 800; letter-spacing: -0.3px; }
     .metric label { display: block; font-size: 11px; color: var(--muted); }
 
+    .trace-card { padding: 18px 20px; margin-top: 20px; }
+    .trace-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .trace-head h2 { margin: 0; font-size: 18px; }
+    .trace-list { position: relative; margin-top: 14px; padding-left: 16px; }
+    .trace-list::before {
+      content: ""; position: absolute; left: 4px; top: 5px; bottom: 5px;
+      width: 2px; background: var(--line);
+    }
+    .trace-item { position: relative; padding: 6px 0 10px 16px; }
+    .trace-item::before {
+      content: ""; position: absolute; left: -17px; top: 12px;
+      width: 9px; height: 9px; border-radius: 50%;
+      background: var(--accent); box-shadow: 0 0 0 3px var(--surface);
+    }
+    .trace-head-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .trace-node { font-size: 13px; font-weight: 800; }
+    .trace-meta { font-size: 11px; color: var(--muted); }
+    .trace-detail { margin-top: 2px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+
     .progress { height: 4px; margin-top: 16px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
     .progress > div { height: 100%; width: 40%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); animation: slide 1.4s ease-in-out infinite; }
     .progress.done > div { animation: none; width: 100%; background: var(--success); }
@@ -302,6 +321,14 @@
       <div id="errorBox" class="error hidden" role="alert"></div>
     </section>
 
+    <section id="traceCard" class="card trace-card hidden">
+      <div class="trace-head">
+        <h2>执行轨迹</h2>
+        <span id="traceCount" class="muted" style="font-size:12px"></span>
+      </div>
+      <div id="traceList" class="trace-list"></div>
+    </section>
+
     <section id="hitlCard" class="card hitl hidden">
       <h3>需要你的审批</h3>
       <p>系统已生成研究计划。继续后会并行调用多个研究员，请确认方向。</p>
@@ -416,7 +443,9 @@
     }
 
     function formatDuration(ms) {
-      const total = Math.max(0, Math.floor(ms / 1000));
+      const value = Math.max(0, Number(ms) || 0);
+      if (value < 1000) return `${Math.round(value)}ms`;
+      const total = Math.floor(value / 1000);
       const minutes = Math.floor(total / 60);
       const seconds = total % 60;
       return minutes ? `${minutes}m ${seconds}s` : `${seconds}s`;
@@ -477,6 +506,7 @@
       state.hitlMode = null;
       hide($("#reportCard"));
       hide($("#verificationCard"));
+      hide($("#traceCard"));
       hide($("#hitlCard"));
       hide($("#hitlExtra"));
       hide($("#empty"));
@@ -484,6 +514,7 @@
       clearError();
       $("#reportBody").innerHTML = "";
       $("#guardrails").innerHTML = "";
+      $("#traceList").innerHTML = "";
     }
 
     async function startResearch(query) {
@@ -547,6 +578,7 @@
         }
         const data = await resp.json();
         updateMetrics(data);
+        renderTrace(data);
 
         if (data.infrastructure_error) {
           stopTimers();
@@ -651,6 +683,40 @@
       show($("#reportCard"));
       renderVerification(data);
       hide($("#empty"));
+    }
+
+    function renderTrace(data) {
+      const trace = [...(data.trace || [])].sort(
+        (a, b) => (a.started_at || 0) - (b.started_at || 0)
+      );
+      if (!trace.length) {
+        hide($("#traceCard"));
+        return;
+      }
+      $("#traceCount").textContent = `${trace.length} 个事件`;
+      const list = $("#traceList");
+      list.innerHTML = "";
+      for (const event of trace) {
+        const item = document.createElement("div");
+        item.className = "trace-item";
+        const head = document.createElement("div");
+        head.className = "trace-head-row";
+        const node = document.createElement("span");
+        node.className = "trace-node";
+        node.textContent = event.node || "node";
+        const meta = document.createElement("span");
+        meta.className = "trace-meta";
+        meta.textContent =
+          `${formatDuration(event.duration_ms || 0)} · ` +
+          `${event.llm_calls || 0} 次模型调用 · 轮次 ${event.iteration ?? 0}`;
+        head.append(node, meta);
+        const detail = document.createElement("div");
+        detail.className = "trace-detail";
+        detail.textContent = event.detail || "";
+        item.append(head, detail);
+        list.appendChild(item);
+      }
+      show($("#traceCard"));
     }
 
     function renderVerification(data) {

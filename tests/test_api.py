@@ -46,6 +46,18 @@ _EVIDENCE = [
     }
 ]
 
+_TRACE = [
+    {
+        "node": "planner",
+        "status": "ok",
+        "started_at": 1,
+        "duration_ms": 12.3,
+        "iteration": 0,
+        "llm_calls": 1,
+        "detail": "1 个子任务",
+    }
+]
+
 
 class StubGraph:
     def __init__(self, interrupt_first: bool = False) -> None:
@@ -66,6 +78,7 @@ class StubGraph:
                 "verification": _VERIFICATION,
                 "claims": _CLAIMS,
                 "evidence": _EVIDENCE,
+                "trace": _TRACE,
             }
             return dict(self.values)
 
@@ -93,6 +106,7 @@ class StubGraph:
             "verification": _VERIFICATION,
             "claims": _CLAIMS,
             "evidence": _EVIDENCE,
+            "trace": _TRACE,
         }
         self.next = ()
         return dict(self.values)
@@ -137,6 +151,7 @@ def test_start_and_poll_to_completion() -> None:
         assert body["verification"]["total"] == 1
         assert body["claims"][0]["status"] == "supported"
         assert body["evidence"][0]["evidence_id"] == "ev-1"
+        assert body["trace"][0]["node"] == "planner"
 
 
 def test_unknown_thread_returns_404() -> None:

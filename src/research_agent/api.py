@@ -65,6 +65,7 @@ class ResearchStatus(BaseModel):
     verification: dict | None = None
     claims: list[dict] | None = None
     evidence: list[dict] | None = None
+    trace: list[dict] | None = None
     infrastructure_error: str | None = None
     error: str | None = None
     interrupt: dict | None = None
@@ -177,6 +178,7 @@ def _read_status(graph, registry: JobRegistry, thread_id: str) -> ResearchStatus
         verification=values.get("verification") if completed else None,
         claims=_dump_items(values.get("claims")) if completed else None,
         evidence=_dump_items(values.get("evidence")) if completed else None,
+        trace=values.get("trace"),
         infrastructure_error=values.get("infrastructure_error"),
         error=error,
         interrupt=interrupt_payload,

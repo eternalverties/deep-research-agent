@@ -44,6 +44,11 @@ class Claim(BaseModel):
     reason: str = ""
 
 
+def keep_first(left: str | None, right: str | None) -> str:
+    """多个并行分支同时报告基础设施错误时，保留第一个非空值。"""
+    return left or right or ""
+
+
 class ResearchState(TypedDict, total=False):
     query: str
     subtasks: list[str]
@@ -51,6 +56,7 @@ class ResearchState(TypedDict, total=False):
     evidence: Annotated[list[Evidence], add]
     claims: list[Claim]
     verification: dict
+    trace: Annotated[list[dict], add]
     report: dict
     citations: list[str]
     iterations: int
@@ -59,7 +65,7 @@ class ResearchState(TypedDict, total=False):
     # 护栏与预算
     rejected: bool
     rejection_reason: str
-    infrastructure_error: str
+    infrastructure_error: Annotated[str, keep_first]
     llm_calls: Annotated[int, add]
     repairs: int
     repair_notes: str

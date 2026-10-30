@@ -35,6 +35,7 @@ from research_agent.nodes.planner import planner_node
 from research_agent.nodes.researcher import researcher_node
 from research_agent.nodes.synthesizer import synthesizer_node
 from research_agent.nodes.verifier import verifier_node
+from research_agent.observability import traced
 from research_agent.persistence import sqlite_saver
 from research_agent.reporting import render_report_markdown
 from research_agent.state import ResearchState
@@ -127,15 +128,19 @@ def build_graph(checkpointer=None):
             "HITL 审批需要 checkpointer：请用 sqlite_saver() 创建图后再编译。"
         )
     graph = StateGraph(ResearchState)
-    graph.add_node("input_guard", input_guard_node)
-    graph.add_node("planner", planner_node, retry_policy=RETRY_POLICY)
+    graph.add_node("input_guard", traced("input_guard")(input_guard_node))
+    graph.add_node("planner", traced("planner")(planner_node), retry_policy=RETRY_POLICY)
     graph.add_node("approval", approval_node)
-    graph.add_node("researcher", researcher_node, retry_policy=RETRY_POLICY)
-    graph.add_node("critic", critic_node, retry_policy=RETRY_POLICY)
-    graph.add_node("fail", fail_node)
-    graph.add_node("synthesizer", synthesizer_node, retry_policy=RETRY_POLICY)
-    graph.add_node("verifier", verifier_node, retry_policy=RETRY_POLICY)
-    graph.add_node("output_guard", output_guard_node)
+    graph.add_node(
+        "researcher", traced("researcher")(researcher_node), retry_policy=RETRY_POLICY
+    )
+    graph.add_node("critic", traced("critic")(critic_node), retry_policy=RETRY_POLICY)
+    graph.add_node("fail", traced("fail")(fail_node))
+    graph.add_node(
+        "synthesizer", traced("synthesizer")(synthesizer_node), retry_policy=RETRY_POLICY
+    )
+    graph.add_node("verifier", traced("verifier")(verifier_node), retry_policy=RETRY_POLICY)
+    graph.add_node("output_guard", traced("output_guard")(output_guard_node))
 
     graph.add_edge(START, "input_guard")
     graph.add_conditional_edges("input_guard", route_after_input_guard, ["planner", END])

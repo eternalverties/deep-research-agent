@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from research_agent.graph import build_graph
 from research_agent.nodes.planner import ResearchPlan
-from research_agent.state import Finding, ResearchState
+from research_agent.state import Finding, ResearchState, keep_first
 
 
 def test_research_plan_requires_3_to_5_subtasks() -> None:
@@ -43,3 +43,8 @@ def test_graph_compiles_without_network() -> None:
 def test_finding_model() -> None:
     f = Finding(claim="LangGraph 支持 checkpoint", source_url="https://example.com")
     assert f.source_url == "https://example.com"
+
+
+def test_infrastructure_error_keeps_first_value() -> None:
+    assert keep_first("", "Error 432") == "Error 432"
+    assert keep_first("Error 432", "Error 429") == "Error 432"
