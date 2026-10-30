@@ -156,6 +156,28 @@ docker run --env-file .env -p 8000:8000 deep-research-agent
 可观测：设置 `LANGSMITH_TRACING=true` 与 `LANGSMITH_API_KEY` 后，每次运行会带上
 `run_name` 与角色模型元数据，可在 LangSmith 查看完整调用树。
 
+### 7.1 Vue 3 + TypeScript 前端
+
+前端在 `frontend/`，使用 Vue 3 + TypeScript + Vite。
+
+开发模式（Vite 5173，自动代理 `/research` 与 `/health` 到 8000）：
+
+```bash
+cd frontend
+npm install --registry=https://registry.npmmirror.com
+npm run dev
+```
+
+生产构建：
+
+```bash
+npm run build
+```
+
+构建产物在 `frontend/dist`。FastAPI 启动时会优先托管该目录，打开
+http://127.0.0.1:8000/ 即可访问 Vue 前端；如果尚未构建，则回退到内置静态页。
+Docker 构建会先构建 Vue，再把产物复制进运行时镜像。
+
 ### 8. 评测与 CI（M8）
 
 默认测试只跑离线单元测试：
@@ -201,6 +223,7 @@ CI 工作流在 `.github/workflows/`：`ci.yml` 每次 push/PR 跑 lint 与离�
 - [x] M8 评测 + CI
 - [x] V2 Claim-Evidence 事实核验（证据片段 + 断言状态 + 有界修复）
 - [x] V2 本地 Observability（节点耗时 / 调用数 / 执行轨迹时间线）
+- [x] Vue 3 + TypeScript 前端（Vite，FastAPI 托管构建产物）
 
 ## 简历要点
 
@@ -218,6 +241,8 @@ CI 工作流在 `.github/workflows/`：`ci.yml` 每次 push/PR 跑 lint 与离�
 - 实现多级搜索降级：Tavily → Serper → Bing RSS，带 Tavily 熔断与统一结果结构；
   前端会标记搜索源，Bing 后备会显示「搜索降级」提示。
 - 使用 FastAPI 提交-轮询 API 与 Docker 封装长任务服务，支持异步研究任务与人工审批。
+- 使用 Vue 3 + TypeScript + Vite 构建研究控制台：实时状态、执行轨迹、结构化报告、
+  证据核验与 HITL 审批，支持开发代理和生产构建。
 
 ## 参考实现
 

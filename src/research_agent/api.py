@@ -17,6 +17,7 @@ from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 from pydantic import BaseModel, Field
@@ -26,6 +27,8 @@ from research_agent.graph import build_graph
 from research_agent.persistence import sqlite_saver
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_FRONTEND_DIST = _PROJECT_ROOT / "frontend" / "dist"
 
 
 class ResearchRequest(BaseModel):
@@ -212,12 +215,21 @@ def create_api(graph=None) -> FastAPI:
         lifespan=lifespan,
     )
 
+    if _FRONTEND_DIST.exists():
+        api.mount(
+            "/assets",
+            StaticFiles(directory=_FRONTEND_DIST / "assets"),
+            name="frontend-assets",
+        )
+
     @api.get("/health")
     def health() -> dict:
         return {"status": "ok"}
 
     @api.get("/", include_in_schema=False)
     def index() -> FileResponse:
+        if _FRONTEND_DIST.exists():
+            return FileResponse(_FRONTEND_DIST / "index.html")
         return FileResponse(_STATIC_DIR / "index.html")
 
     @api.post("/research", response_model=ResearchAccepted, status_code=202)

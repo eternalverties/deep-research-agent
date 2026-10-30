@@ -28,3 +28,5 @@ tests
 evals
 *.md
 .github
+frontend/node_modules
+frontend/dist

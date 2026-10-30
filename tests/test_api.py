@@ -138,7 +138,7 @@ def test_index_serves_frontend() -> None:
         resp = client.get("/")
         assert resp.status_code == 200
         assert "Deep Research Agent" in resp.text
-        assert 'id="researchForm"' in resp.text
+        assert 'id="app"' in resp.text or 'id="researchForm"' in resp.text
 
 
 def test_start_and_poll_to_completion() -> None:
