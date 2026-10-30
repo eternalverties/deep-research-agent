@@ -24,8 +24,9 @@ class Settings(BaseSettings):
 
     # 搜索服务的密钥。显式放进 Settings，避免各个工具模块隐式依赖 .env 已被加载。
     tavily_api_key: str = ""
-    search_provider: str = "auto"  # auto / tavily / duckduckgo
+    search_provider: str = "auto"  # auto / tavily / bing
     search_max_results: int = 6
+    search_timeout_seconds: int = 10
 
     temperature: float = 0.0
 

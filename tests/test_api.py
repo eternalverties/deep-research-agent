@@ -79,6 +79,7 @@ class StubGraph:
                 "claims": _CLAIMS,
                 "evidence": _EVIDENCE,
                 "trace": _TRACE,
+                "search_provider": "bing",
             }
             return dict(self.values)
 
@@ -107,6 +108,7 @@ class StubGraph:
             "claims": _CLAIMS,
             "evidence": _EVIDENCE,
             "trace": _TRACE,
+            "search_provider": "bing",
         }
         self.next = ()
         return dict(self.values)
@@ -152,6 +154,7 @@ def test_start_and_poll_to_completion() -> None:
         assert body["claims"][0]["status"] == "supported"
         assert body["evidence"][0]["evidence_id"] == "ev-1"
         assert body["trace"][0]["node"] == "planner"
+        assert body["search_provider"] == "bing"
 
 
 def test_unknown_thread_returns_404() -> None:

@@ -140,6 +140,20 @@ def _tool_errors(messages) -> list[str]:
     return errors
 
 
+def _tool_provider(messages) -> str:
+    """识别本次检索使用的是 Tavily 还是免费降级后端。"""
+    for message in messages:
+        if not isinstance(message, ToolMessage):
+            continue
+        try:
+            data = json.loads(_as_text(message.content))
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if isinstance(data, dict) and data.get("provider"):
+            return str(data["provider"])
+    return "tavily"
+
+
 def researcher_node(state: dict) -> dict:
     """执行单个子任务，返回结构化发现与本次模型调用数。"""
     task = state["subtasks"][0]
@@ -157,6 +171,7 @@ def researcher_node(state: dict) -> dict:
             "evidence": [],
             "llm_calls": counter.count,
             "infrastructure_error": errors[0][:300],
+            "search_provider": _tool_provider(messages),
         }
 
     # 工具调用结果和最终回答里都可能出现来源 URL，统一收集。
@@ -173,4 +188,5 @@ def researcher_node(state: dict) -> dict:
         "findings": findings,
         "evidence": _extract_evidence(messages),
         "llm_calls": counter.count,
+        "search_provider": _tool_provider(messages),
     }

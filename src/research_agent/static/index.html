@@ -184,6 +184,7 @@
     @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
 
     .error { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: rgba(220, 38, 38, 0.1); color: var(--danger); font-size: 13px; border: 1px solid rgba(220, 38, 38, 0.18); }
+    .warning { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: rgba(217, 119, 6, 0.1); color: var(--warning); font-size: 12px; border: 1px solid rgba(217, 119, 6, 0.2); }
 
     .hitl { margin-top: 20px; padding: 20px; border-color: rgba(217, 119, 6, 0.35); background: linear-gradient(180deg, rgba(217, 119, 6, 0.08), var(--surface)); }
     .hitl h3 { margin: 0 0 6px; font-size: 18px; }
@@ -319,6 +320,7 @@
       </div>
       <div id="progress" class="progress"><div></div></div>
       <div id="errorBox" class="error hidden" role="alert"></div>
+      <div id="degradedBox" class="warning hidden" role="status"></div>
     </section>
 
     <section id="traceCard" class="card trace-card hidden">
@@ -512,6 +514,8 @@
       hide($("#empty"));
       show($("#statusCard"));
       clearError();
+      $("#degradedBox").textContent = "";
+      hide($("#degradedBox"));
       $("#reportBody").innerHTML = "";
       $("#guardrails").innerHTML = "";
       $("#traceList").innerHTML = "";
@@ -579,6 +583,7 @@
         const data = await resp.json();
         updateMetrics(data);
         renderTrace(data);
+        updateSearchProvider(data.search_provider);
 
         if (data.infrastructure_error) {
           stopTimers();
@@ -717,6 +722,18 @@
         list.appendChild(item);
       }
       show($("#traceCard"));
+    }
+
+    function updateSearchProvider(provider) {
+      const box = $("#degradedBox");
+      if (provider && provider !== "tavily") {
+        box.textContent =
+          `搜索降级：${String(provider).toUpperCase()}（免费后备），结果质量可能低于 Tavily`;
+        show(box);
+      } else {
+        box.textContent = "";
+        hide(box);
+      }
     }
 
     function renderVerification(data) {

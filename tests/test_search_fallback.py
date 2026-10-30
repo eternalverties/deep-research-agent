@@ -23,13 +23,13 @@ def test_auto_falls_back_on_quota_error(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         search,
-        "_duckduckgo_search",
-        lambda query: {"provider": "duckduckgo", "results": [{"url": "https://a.com"}]},
+        "_bing_search",
+        lambda query: {"provider": "bing", "results": [{"url": "https://a.com"}]},
     )
     monkeypatch.setattr(settings, "search_provider", "auto")
 
     result = web_search.invoke({"query": "测试"})
-    assert result["provider"] == "duckduckgo"
+    assert result["provider"] == "bing"
 
 
 def test_tavily_only_keeps_error(monkeypatch) -> None:
@@ -44,34 +44,35 @@ def test_tavily_only_keeps_error(monkeypatch) -> None:
     assert "error" in result
 
 
-def test_duckduckgo_provider_skips_tavily(monkeypatch) -> None:
+def test_bing_provider_skips_tavily(monkeypatch) -> None:
     def should_not_call():
         raise AssertionError("Tavily should not be called")
 
     monkeypatch.setattr(search, "_get_search", should_not_call)
     monkeypatch.setattr(
         search,
-        "_duckduckgo_search",
-        lambda query: {"provider": "duckduckgo", "results": []},
+        "_bing_search",
+        lambda query: {"provider": "bing", "results": []},
     )
-    monkeypatch.setattr(settings, "search_provider", "duckduckgo")
+    monkeypatch.setattr(settings, "search_provider", "bing")
 
     result = web_search.invoke({"query": "测试"})
-    assert result["provider"] == "duckduckgo"
+    assert result["provider"] == "bing"
 
 
-def test_duckduckgo_result_normalization(monkeypatch) -> None:
-    class FakeDDGS:
-        def text(self, query, max_results):
-            return [
-                {
-                    "title": "A",
-                    "href": "https://a.com",
-                    "body": "一段正文",
-                }
-            ]
+def test_bing_result_normalization(monkeypatch) -> None:
+    class FakeResponse:
+        content = (
+            '<?xml version="1.0"?><rss><channel><item>'
+            "<title>A</title><link>https://a.com</link>"
+            "<description><b>一段正文</b></description>"
+            "</item></channel></rss>"
+        ).encode()
 
-    monkeypatch.setattr(search, "DDGS", FakeDDGS)
-    result = search._duckduckgo_search("测试")
+        def raise_for_status(self):
+            return None
+
+    monkeypatch.setattr(search.httpx, "get", lambda *args, **kwargs: FakeResponse())
+    result = search._bing_search("测试")
     assert result["results"][0]["url"] == "https://a.com"
     assert result["results"][0]["content"] == "一段正文"

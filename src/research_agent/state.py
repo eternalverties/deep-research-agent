@@ -57,6 +57,7 @@ class ResearchState(TypedDict, total=False):
     claims: list[Claim]
     verification: dict
     trace: Annotated[list[dict], add]
+    search_provider: Annotated[str, keep_first]
     report: dict
     citations: list[str]
     iterations: int

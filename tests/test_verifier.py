@@ -4,7 +4,7 @@ import json
 
 from langchain_core.messages import ToolMessage
 
-from research_agent.nodes.researcher import _extract_evidence, _tool_errors
+from research_agent.nodes.researcher import _extract_evidence, _tool_errors, _tool_provider
 from research_agent.nodes.verifier import (
     _fallback_claims,
     candidate_evidence,
@@ -89,3 +89,11 @@ def test_tool_errors_detects_quota_limit() -> None:
     errors = _tool_errors([message])
     assert errors
     assert "432" in errors[0]
+
+
+def test_tool_provider_detects_bing() -> None:
+    message = ToolMessage(
+        content='{"provider": "bing", "results": []}',
+        tool_call_id="tool-provider",
+    )
+    assert _tool_provider([message]) == "bing"
