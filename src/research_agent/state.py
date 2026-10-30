@@ -26,7 +26,8 @@ class ResearchState(TypedDict, total=False):
     query: str
     subtasks: list[str]
     findings: Annotated[list[Finding], add]
-    report: str
+    report: dict
+    citations: list[str]
     iterations: int
     gaps: list[str]
 

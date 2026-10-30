@@ -1,15 +1,17 @@
-"""M4 · 带反思闭环的多智能体研究图。
+"""M5 · 带反思闭环与输出护栏的多智能体研究图。
 
 当前链路：
-    START → planner →（Send × N，并行 researcher）→ critic
-          ↑                                            │
-          └──────── 覆盖不足且未到上限 ────────────────┘
-                                                       ↓
-                                                   collect → END
+    START → input_guard → planner →（Send × N，并行 researcher）→ critic
+                                   ↑                               │
+                                   └── 覆盖不足且未到上限 ─────────┘
+                                                                   ↓
+                                     synthesizer → output_guard → END
+                                          ↑             │
+                                          └── 需修复 ───┘
 
-Planner 决定运行时「开多少个研究员」；每个 Send 携带一个子任务；
-所有 researcher 分支结束后，findings 通过 reducer 汇总到父状态；
-Critic 判断覆盖是否充分，不足则带着 gaps 回流 Planner 补研。
+Planner 决定运行时开多少个研究员；findings 通过 reducer 跨并行分支累加；
+Critic 判断覆盖是否充分；Synthesizer 生成 summary/sections/citations；
+Output Guard 校验每条引用是否真的来自检索结果，不合格则有界重写一次。
 """
 
 from __future__ import annotations
@@ -24,8 +26,11 @@ from research_agent.config import settings
 from research_agent.guardrails import RETRY_POLICY
 from research_agent.nodes.critic import critic_node
 from research_agent.nodes.input_guard import input_guard_node
+from research_agent.nodes.output_guard import output_guard_node
 from research_agent.nodes.planner import planner_node
 from research_agent.nodes.researcher import researcher_node
+from research_agent.nodes.synthesizer import synthesizer_node
+from research_agent.reporting import render_report_markdown
 from research_agent.state import ResearchState
 
 
@@ -49,26 +54,6 @@ def route_after_input_guard(state: ResearchState) -> str:
     return END if state.get("rejected") else "planner"
 
 
-def collect_node(state: ResearchState) -> dict:
-    """fan-in 汇总节点（M5 会升级成带引用的 synthesizer）。"""
-    findings = state.get("findings") or []
-    grouped: dict[str, list[str]] = {}
-    for item in findings:
-        urls = grouped.setdefault(item.claim, [])
-        if item.source_url and item.source_url not in urls:
-            urls.append(item.source_url)
-
-    lines: list[str] = []
-    for claim, urls in grouped.items():
-        lines.append(f"- {claim}")
-        if urls:
-            lines.append("  来源：" + "；".join(urls))
-        else:
-            lines.append("  来源：（未标注来源）")
-    body = "\n".join(lines) if lines else "（没有找到可用的发现）"
-    return {"report": "## 研究发现\n" + body}
-
-
 def route_after_critic(state: ResearchState) -> str:
     """三重判断：已充分 / 迭代到顶 / 预算花完，任一成立就收尾。
 
@@ -82,8 +67,13 @@ def route_after_critic(state: ResearchState) -> str:
         or iterations >= settings.max_research_iterations
         or budget_spent
     ):
-        return "collect"
+        return "synthesizer"
     return "planner"
+
+
+def route_after_output_guard(state: ResearchState) -> str:
+    """引用/内容校验不合格时回到 synthesizer 修复；否则交卷。"""
+    return "synthesizer" if state.get("_needs_repair") else END
 
 
 def build_graph(checkpointer=None):
@@ -93,14 +83,16 @@ def build_graph(checkpointer=None):
     graph.add_node("planner", planner_node, retry_policy=RETRY_POLICY)
     graph.add_node("researcher", researcher_node, retry_policy=RETRY_POLICY)
     graph.add_node("critic", critic_node, retry_policy=RETRY_POLICY)
-    graph.add_node("collect", collect_node)
+    graph.add_node("synthesizer", synthesizer_node, retry_policy=RETRY_POLICY)
+    graph.add_node("output_guard", output_guard_node)
 
     graph.add_edge(START, "input_guard")
     graph.add_conditional_edges("input_guard", route_after_input_guard, ["planner", END])
     graph.add_conditional_edges("planner", route_to_researchers, ["researcher", END])
     graph.add_edge("researcher", "critic")
-    graph.add_conditional_edges("critic", route_after_critic, ["planner", "collect"])
-    graph.add_edge("collect", END)
+    graph.add_conditional_edges("critic", route_after_critic, ["planner", "synthesizer"])
+    graph.add_edge("synthesizer", "output_guard")
+    graph.add_conditional_edges("output_guard", route_after_output_guard, ["synthesizer", END])
     return graph.compile(checkpointer=checkpointer)
 
 
@@ -116,12 +108,17 @@ def main() -> None:
     if result.get("rejected"):
         print("无法开始研究：", result.get("rejection_reason", "输入不合法"))
         return
-    print(result["report"])
+    print(render_report_markdown(result.get("report") or {}))
+    if result.get("guardrail_flags"):
+        print("⚠ 输出护栏标记：")
+        for flag in result["guardrail_flags"]:
+            print("  -", flag)
     print("\n子任务数：", len(result.get("subtasks", [])))
     print("发现数：", len(result.get("findings", [])))
     print("模型调用数：", result.get("llm_calls", 0))
     print("迭代轮数：", result.get("iterations", 0))
     print("覆盖是否充分：", result.get("_sufficient", False))
+    print("输出修复次数：", result.get("repairs", 0))
 
 
 if __name__ == "__main__":

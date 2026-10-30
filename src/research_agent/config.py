@@ -26,6 +26,11 @@ class Settings(BaseSettings):
 
     temperature: float = 0.0
 
+    # 输出护栏：引用覆盖率阈值与最多修复次数。
+    guardrail_output_enabled: bool = True
+    min_citation_coverage: float = 0.8
+    max_output_repairs: int = 1
+
     # 研究循环与预算上限（M4 用到）：迭代次数 + LLM 调用次数双重封顶。
     max_research_iterations: int = 2
     # 5 个研究员一轮通常要 20+ 次调用，40 留出一次反思补研的余量，同时仍能兜底。
