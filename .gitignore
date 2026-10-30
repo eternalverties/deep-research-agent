@@ -10,6 +10,9 @@ venv/
 # 本地持久化
 checkpoints.db
 *.db
+*.db-wal
+*.db-shm
+*.db-journal
 
 # 第三方参考代码（仅本地学习用，不提交进本项目）
 references/
