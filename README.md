@@ -41,12 +41,21 @@ python -m venv .venv
 
 智能体会先联网检索，再基于检索结果作答，并在末尾列出使用过的来源 URL。
 
+### 5. 运行 M3：并行多研究员
+
+```bash
+.venv\Scripts\python.exe -m research_agent.graph "你的研究问题"
+```
+
+Planner 先拆解子任务，再用 `Send` 为每个子任务并行派发一个研究员，最后汇总发现、
+来源 URL、子任务数与模型调用数。并发上限为 3，节点带指数退避重试。
+
 ## 进度
 
 - [x] M0 项目骨架与依赖环境
 - [x] M1 最小 ReAct 智能体（DeepSeek + Tavily，带来源回答）
 - [x] M2 图建模 + Planner（拆解子任务）
-- [ ] M3 并行 fan-out（多研究员）
+- [x] M3 并行 fan-out（多研究员）
 - [ ] M4 反思闭环 + 成本护栏
 - [ ] M5 结构化引用报告 + 输出护栏
 - [ ] M6 持久化 + 人在回路
