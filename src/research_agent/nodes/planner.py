@@ -1,6 +1,6 @@
 """Planner 节点：把用户的研究问题拆成 3–5 个可独立检索的子任务。"""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from research_agent.models import get_model
 
@@ -37,10 +37,18 @@ def _feedback_text(state: dict) -> str:
 
 def planner_node(state: dict) -> dict:
     """调用模型做结构化拆解，返回状态的部分更新。"""
-    plan: ResearchPlan = get_model("planner").with_structured_output(ResearchPlan).invoke(
-        [
-            ("system", _PLANNER_SYSTEM),
-            ("human", f"研究问题：{state['query']}\n\n修改依据：{_feedback_text(state)}"),
-        ]
-    )
+    try:
+        plan: ResearchPlan = get_model("planner").with_structured_output(ResearchPlan).invoke(
+            [
+                ("system", _PLANNER_SYSTEM),
+                ("human", f"研究问题：{state['query']}\n\n修改依据：{_feedback_text(state)}"),
+            ]
+        )
+    except ValidationError:
+        # 问题过于笼统时模型可能只返回 1 个子任务；转成可读的拒绝状态，
+        # 而不是让整个图因为一次结构化校验失败而崩溃。
+        return {
+            "rejected": True,
+            "rejection_reason": "问题过于笼统，无法拆解成有效的检索子任务，请补充具体范围或背景。",
+        }
     return {"subtasks": plan.subtasks, "plan_feedback": "", "llm_calls": 1}
